@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SwipeJob MVP Prototype</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body {
+            font-family: 'Inter', 'PingFang SC', sans-serif;
+            background-color: #EAE5DB;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .app-bg { background-color: #F6F3EE; }
+        .accent-bg { background-color: #D2FF00; }
+        .accent-border { border-color: #D2FF00; }
+        .accent-text { color: #111111; }
+        
+        /* 隐藏滚动条 */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* 卡片堆叠及动画效果 */
+        .card-container {
+            position: relative;
+            height: 100%;
+            width: 100%;
+            perspective: 1000px;
+        }
+        .swipe-card {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            cursor: grab;
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.2s;
+            transform-origin: center bottom;
+            touch-action: none;
+        }
+        .swipe-card:active { cursor: grabbing; }
+        
+        /* 闪光信号指示器 */
+        .flash-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            border-radius: 16px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.15s ease;
+            z-index: 30;
+        }
+    </style>
+</head>
+<body class="flex justify-center items-center min-h-screen p-0 sm:p-4">
+
+    <div class="relative w-full max-w-md h-screen sm:h-[844px] app-bg sm:rounded-[40px] shadow-2xl flex flex-col overflow-hidden border border-neutral-300/50">
+        
+        <div class="px-6 pt-3 pb-2 flex justify-between items-center text-xs font-semibold text-neutral-800 shrink-0 select-none">
+            <span id="current-time">09:41</span>
+            <div class="flex items-center space-x-1.5">
+                <i data-lucide="signal" class="w-3.5 h-3.5"></i>
+                <i data-lucide="wifi" class="w-3.5 h-3.5"></i>
+                <i data-lucide="battery" class="w-4 h-4"></i>
+            </div>
+        </div>
+
+        <div id="match-popup" class="absolute inset-0 bg-black/80 z-50 flex flex-col justify-center items-center px-8 hidden transition-all duration-300">
+            <div class="accent-bg text-black px-4 py-1 text-xs font-bold tracking-widest rounded-full mb-2 animate-bounce">BOOM! DOUBLE MATCH</div>
+            <h2 class="text-white text-3xl font-extrabold text-center mb-6">信号双向对接成功!</h2>
+            <p class="text-neutral-400 text-sm text-center mb-8">HR 已经将您加入意向清单，且您也对该职位发出了感兴趣信号。</p>
+            <div class="flex space-x-4 w-full">
+                <button onclick="closeMatchPopup()" class="flex-1 py-3 border border-neutral-600 rounded-xl text-white text-sm font-medium">继续翻卡</button>
+                <button onclick="goToChatFromMatch()" class="flex-1 py-3 accent-bg text-black rounded-xl text-sm font-bold flex items-center justify-center gap-2">
+                    <i data-lucide="message-square" class="w-4 h-4"></i> 立即沟通
+                </button>
+            </div>
+        </div>
+
+        <div id="main-content" class="flex-1 overflow-hidden relative flex flex-col">
+            
+            <div id="view-feed" class="flex-1 flex flex-col overflow-hidden px-4 pb-4">
+                <div class="flex items-center space-x-2 my-3 select-none shrink-0">
+                    <button onclick="switchFilter('nearby')" id="filter-nearby" class="px-3.5 py-1.5 rounded-full text-xs font-bold bg-black text-white flex items-center gap-1 transition-all">
+                        <i data-lucide="map-pin" class="w-3 h-3"></i> Nearby 通勤模式
+                    </button>
+                    <button onclick="switchFilter('industry')" id="filter-industry" class="px-3.5 py-1.5 rounded-full text-xs font-medium bg-white text-neutral-600 border border-neutral-200 flex items-center gap-1 transition-all">
+                        <i data-lucide="briefcase" class="w-3 h-3"></i> Industry 行业
+                    </button>
+                    <button onclick="switchFilter('score')" id="filter-score" class="px-3.5 py-1.5 rounded-full text-xs font-medium bg-white text-neutral-600 border border-neutral-200 flex items-center gap-1 transition-all">
+                        <i data-lucide="sparkles" class="w-3 h-3"></i> Match Score AI匹配
+                    </button>
+                </div>
+
+                <div class="flex-1 relative mb-4">
+                    <div id="deck" class="card-container">
+                        <div id="empty-deck-state" class="absolute inset-0 flex flex-col justify-center items-center text-center p-6 hidden">
+                            <div class="w-16 h-16 rounded-full bg-white flex items-center justify-center shadow-sm mb-3">
+                                <i data-lucide="refresh-cw" class="w-6 h-6 text-neutral-400"></i>
+                            </div>
+                            <h3 class="text-neutral-800 font-semibold mb-1">附近的职位都刷完啦</h3>
+                            <p class="text-neutral-500 text-xs">调整你的通勤时间范围或求职偏好再试试看吧</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex justify-center items-center space-x-6 pb-2 shrink-0 select-none">
+                    <button onclick="triggerSwipeAction('pass')" class="w-12 h-12 rounded-full bg-white shadow-md flex items-center justify-center border border-neutral-100 hover:scale-105 active:scale-95 transition-transform group">
+                        <i data-lucide="x" class="w-6 h-6 text-rose-500 group-hover:stroke-[3]"></i>
+                    </button>
+                    <button onclick="triggerSwipeAction('save')" class="w-10 h-10 rounded-full bg-white shadow-md flex items-center justify-center border border-neutral-100 hover:scale-105 active:scale-95 transition-transform group">
+                        <i data-lucide="bookmark" class="w-5 h-5 text-amber-500 group-hover:fill-amber-500"></i>
+                    </button>
+                    <button onclick="triggerSwipeAction('interested')" class="w-12 h-12 bg-black shadow-md flex items-center justify-center rounded-full border border-neutral-900 hover:scale-105 active:scale-95 transition-transform group">
+                        <i data-lucide="zap" class="w-6 h-6 text-[#D2FF00] fill-[#D2FF00]"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div id="view-match" class="flex-1 flex flex-col overflow-hidden px-4 hidden">
+                <div class="my-3 flex space-x-1 bg-neutral-200/60 p-1 rounded-xl select-none shrink-0">
+                    <button onclick="switchMatchSubTab('hr')" id="subtab-hr" class="flex-1 py-2 text-xs font-bold rounded-lg bg-white shadow-sm transition-all text-center">HR 意向清单</button>
+                    <button onclick="switchMatchSubTab('active')" id="subtab-active" class="flex-1 py-2 text-xs font-medium text-neutral-600 rounded-lg transition-all text-center">双向匹配 (2)</button>
+                    <button onclick="switchMatchSubTab('pending')" id="subtab-pending" class="flex-1 py-2 text-xs font-medium text-neutral-600 rounded-lg transition-all text-center">单向等待</button>
+                </div>
+
+                <div id="match-sub-hr" class="flex-1 overflow-y-auto no-scrollbar pb-6 space-y-3">
+                    <div class="flex items-center justify-between text-xs text-neutral-500 font-medium px-1 select-none">
+                        <span>以下HR对你表达了兴趣（已隐藏敏感身份）</span>
+                        <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5 cursor-pointer"></i>
+                    </div>
+                    <div class="bg-white border border-neutral-200/70 p-4 rounded-2xl shadow-sm relative overflow-hidden">
+                        <div class="absolute top-0 right-0 accent-bg text-black text-[10px] font-bold px-3 py-1 rounded-bl-xl">94% 匹配度</div>
+                        <div class="flex items-center space-x-3 mb-3">
+                            <div class="w-12 h-12 rounded-full bg-neutral-900 flex items-center justify-center text-white font-mono text-xs relative overflow-hidden">
+                                <span class="blind-avatar-placeholder">??</span>
+                                <img class="blind-avatar w-full h-full object-cover hidden" src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=60" alt="">
+                            </div>
+                            <div>
+                                <div class="font-bold text-sm flex items-center gap-1.5">
+                                    <span class="blind-name text-neutral-800">某独角兽芯片企业 · HRBP</span>
+                                </div>
+                                <div class="text-neutral-500 text-xs mt-0.5">寻找：高级前端 / 架构师</div>
+                            </div>
+                        </div>
+                        <div class="space-y-1.5 mb-4">
+                            <div class="text-xs text-neutral-600 flex items-center gap-1"><span class="font-semibold text-neutral-700">技术画像:</span> React / WebGL / Next.js / 团队重构经验</div>
+                            <div class="text-xs text-neutral-600 flex items-center gap-1"><span class="font-semibold text-neutral-700">核心背景:</span> 出海头部大厂 3年+ / 具有从0到1带队履历</div>
+                            <div class="text-xs text-neutral-600 flex items-center gap-1"><span class="font-semibold text-neutral-700">提供预期:</span> 25K - 35K · 班车直达 · 弹性工作</div>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button onclick="revealBlindHR(this)" class="flex-1 py-2 bg-neutral-100 text-neutral-800 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 border border-neutral-200">
+                                <i data-lucide="lock" class="w-3.5 h-3.5"></i> 解锁完整资料
+                            </button>
+                            <button onclick="triggerDirectMatch('Senior Frontend Engineer')" class="flex-1 py-2 bg-black text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5">
+                                <i data-lucide="check" class="w-3.5 h-3.5 text-[#D2FF00]"></i> 接受反向勾搭
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="match-sub-active" class="flex-1 overflow-y-auto no-scrollbar pb-6 space-y-3 hidden">
+                    <div class="bg-white p-4 rounded-2xl border border-neutral-100 shadow-sm flex justify-between items-center">
+                        <div class="flex items-center space-x-3">
+                            <img class="w-12 h-12 rounded-xl object-cover" src="https://images.unsplash.com/photo-1549923746-c502d488b3ea?w=150&auto=format&fit=crop&q=60" alt="">
+                            <div>
+                                <h4 class="font-bold text-sm text-neutral-800">字节跳动 · 资深产品经理</h4>
+                                <p class="text-xs text-emerald-600 font-medium mt-0.5">双方已达成兴趣连接</p>
+                            </div>
+                        </div>
+                        <button onclick="openChatSession('字节跳动HR-Line')" class="p-2.5 bg-neutral-100 hover:bg-neutral-200 rounded-xl transition-colors">
+                            <i data-lucide="message-square" class="w-4 h-4 text-neutral-800"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="match-sub-pending" class="flex-1 overflow-y-auto no-scrollbar pb-6 text-center pt-12 hidden">
+                    <i data-lucide="hourglass" class="w-8 h-8 text-neutral-300 mx-auto mb-2 animate-pulse"></i>
+                    <p class="text-xs text-neutral-500">还有 3 个职位正在等待对方 HR 确认反馈</p>
+                </div>
+            </div>
+
+            <div id="view-saved" class="flex-1 flex flex-col overflow-hidden px-4 hidden">
+                <div class="flex items-center justify-between my-3 select-none shrink-0">
+                    <h2 class="text-lg font-bold text-neutral-900">收藏夹</h2>
+                    <div class="flex space-x-1 text-xs bg-white border border-neutral-200 rounded-lg p-0.5">
+                        <button class="px-3 py-1 font-bold bg-neutral-100 rounded-md">职位</button>
+                        <button class="px-3 py-1 text-neutral-500">企业</button>
+                    </div>
+                </div>
+                <div id="saved-list-container" class="flex-1 overflow-y-auto no-scrollbar pb-6 space-y-3">
+                    </div>
+            </div>
+
+            <div id="view-chat" class="flex-1 flex flex-col overflow-hidden hidden">
+                <div id="chat-list-view" class="flex-1 flex flex-col overflow-hidden px-4">
+                    <h2 class="text-lg font-bold text-neutral-900 my-3 select-none">消息沟通</h2>
+                    <div class="flex-1 overflow-y-auto no-scrollbar space-y-3">
+                        <div onclick="openChatSession('米哈游-招聘组')" class="bg-white p-4 rounded-2xl border border-neutral-100 shadow-sm flex items-center justify-between cursor-pointer hover:bg-neutral-50/50 transition-colors">
+                            <div class="flex items-center space-x-3 overflow-hidden">
+                                <div class="relative shrink-0">
+                                    <img class="w-12 h-12 rounded-xl object-cover" src="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=150&auto=format&fit=crop&q=60" alt="">
+                                    <span class="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 rounded-full border-2 border-white flex items-center justify-center text-[8px] text-white font-bold">1</span>
+                                </div>
+                                <div class="overflow-hidden">
+                                    <div class="flex items-center justify-between">
+                                        <h4 class="font-bold text-sm text-neutral-800 truncate">米哈游 · 游戏海外运营</h4>
+                                    </div>
+                                    <p class="text-xs text-neutral-500 truncate mt-0.5">HR: 看到您的简历非常契合，请问这周二方便约一轮电话初试吗？</p>
+                                </div>
+                            </div>
+                            <div class="flex flex-col items-end shrink-0 pl-2">
+                                <span class="text-[10px] text-neutral-400">14:32</span>
+                                <span class="mt-1 px-2 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-bold rounded-md">面试安排中</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="chat-detail-view" class="absolute inset-0 bg-[#F6F3EE] z-20 flex flex-col hidden">
+                    <div class="px-4 py-3 bg-white border-b border-neutral-200 flex items-center justify-between shrink-0">
+                        <div class="flex items-center space-x-3">
+                            <button onclick="closeChatSession()" class="p-1 text-neutral-600"><i data-lucide="chevron-left" class="w-6 h-6"></i></button>
+                            <div>
+                                <h3 id="chat-title" class="font-bold text-sm text-neutral-800">企业招聘方</h3>
+                                <div class="flex items-center gap-1.5 mt-0.5">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                    <span class="text-[10px] text-neutral-400">当前在线</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="px-2 py-1 bg-amber-500/10 text-amber-700 text-[10px] font-bold rounded-md border border-amber-500/20" id="chat-status-pill">
+                            Interview scheduled
+                        </div>
+                    </div>
+                    <div id="chat-message-stream" class="flex-1 overflow-y-auto no-scrollbar p-4 space-y-4">
+                        <div class="flex justify-center"><span class="text-[10px] text-neutral-400 bg-neutral-200/50 px-2 py-0.5 rounded-full">系统已安全加密沟通通道</span></div>
+                        </div>
+                    <div class="p-3 bg-white border-t border-neutral-200 flex items-center space-x-2 shrink-0">
+                        <input id="chat-input-box" type="text" placeholder="发送你的答复..." class="flex-1 bg-neutral-100 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-black">
+                        <button onclick="sendMockChatMessage()" class="w-10 h-10 accent-bg rounded-xl flex items-center justify-center border border-black/10 text-black hover:opacity-90 active:scale-95 transition-all">
+                            <i data-lucide="send" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="view-profile" class="flex-1 flex flex-col overflow-hidden px-4 hidden">
+                <div class="flex-1 overflow-y-auto no-scrollbar pb-6">
+                    <div class="bg-white p-5 rounded-2xl border border-neutral-200/60 shadow-sm mt-4 text-center relative overflow-hidden">
+                        <div class="absolute top-3 right-3 text-neutral-400 cursor-pointer"><i data-lucide="edit-3" class="w-4 h-4"></i></div>
+                        <div class="w-20 h-20 bg-neutral-900 rounded-full mx-auto mb-3 flex items-center justify-center text-white font-bold text-xl ring-4 ring-[#D2FF00]/30">
+                            简历
+                        </div>
+                        <h3 class="font-bold text-lg text-neutral-800">求职者 (模拟账户)</h3>
+                        <p class="text-xs text-neutral-500 mt-0.5">全栈开发工程师 · 3年工作经验</p>
+                        <div class="inline-flex items-center gap-1.5 mt-3 px-3 py-1 bg-emerald-500/10 text-emerald-700 text-xs font-semibold rounded-full border border-emerald-500/20">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> 积极寻求新机会
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-4 gap-2 my-4 text-center">
+                        <div class="bg-white p-2 rounded-xl border border-neutral-100 shadow-2xs"><div class="font-bold text-sm text-neutral-800">128</div><div class="text-[9px] text-neutral-400 mt-0.5">浏览过</div></div>
+                        <div class="bg-white p-2 rounded-xl border border-neutral-100 shadow-2xs"><div class="font-bold text-sm text-neutral-800">34</div><div class="text-[9px] text-neutral-400 mt-0.5">投递意向</div></div>
+                        <div class="bg-white p-2 rounded-xl border border-neutral-100 shadow-2xs"><div class="font-bold text-sm text-neutral-800" id="profile-match-count">2</div><div class="text-[9px] text-neutral-400 mt-0.5">成功匹配</div></div>
+                        <div class="bg-white p-2 rounded-xl border border-neutral-100 shadow-2xs"><div class="font-bold text-sm text-neutral-800 text-lime-600">1</div><div class="text-[9px] text-neutral-400 mt-0.5">收到Offer</div></div>
+                    </div>
+
+                    <div class="bg-white p-4 rounded-2xl border border-neutral-200/60 shadow-sm space-y-3">
+                        <h4 class="font-bold text-xs text-neutral-400 uppercase tracking-wider flex items-center gap-1"><i data-lucide="sliders" class="w-3.5 h-3.5"></i> 地理与期望求职偏好</h4>
+                        <div class="space-y-2.5">
+                            <div>
+                                <div class="flex justify-between text-xs text-neutral-600 mb-1"><span>理想通勤上限时间 (单程)</span><span class="font-bold text-black" id="commute-val">45 分钟</span></div>
+                                <input type="range" min="15" max="90" value="45" oninput="document.getElementById('commute-val').innerText = this.value + ' 分钟'" class="w-full accent-black h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer">
+                            </div>
+                            <hr class="border-neutral-100">
+                            <div class="flex justify-between items-center text-xs text-neutral-700">
+                                <span>期望薪资目标范围</span>
+                                <span class="font-bold text-black bg-neutral-100 px-2 py-0.5 rounded-md">25K - 35K /月</span>
+                            </div>
+                            <div class="flex justify-between items-center text-xs text-neutral-700">
+                                <span>工作机制模式偏好</span>
+                                <span class="font-bold text-black bg-neutral-100 px-2 py-0.5 rounded-md">Hybrid (混合办公)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="job-detail-modal" class="absolute inset-x-0 bottom-0 top-12 bg-[#F6F3EE] rounded-t-[24px] z-40 flex flex-col translate-y-full transition-transform duration-300 shadow-2xl">
+                <div onclick="closeJobDetail()" class="w-full py-3 flex justify-center items-center cursor-pointer shrink-0">
+                    <div class="w-12 h-1.5 bg-neutral-300 rounded-full"></div>
+                </div>
+                <div class="flex-1 overflow-y-auto no-scrollbar px-5 pb-24 space-y-4" id="modal-detail-content">
+                    </div>
+                <div class="absolute bottom-0 inset-x-0 p-4 bg-gradient-to-t from-[#F6F3EE] via-[#F6F3EE] to-transparent shrink-0 flex space-x-3">
+                    <button onclick="closeJobDetail(); triggerSwipeAction('pass');" class="px-4 py-3 bg-white border border-neutral-200 text-neutral-700 font-semibold rounded-xl text-sm shadow-sm">拒绝不考虑</button>
+                    <button onclick="closeJobDetail(); triggerSwipeAction('interested');" class="flex-1 py-3 accent-bg text-black font-bold rounded-xl text-sm flex items-center justify-center gap-2 border border-black/10 shadow-sm">
+                        <i data-lucide="zap" class="w-4 h-4 fill-current"></i> 发出双向直投信号
+                    </button>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="h-16 bg-white border-t border-neutral-200/80 grid grid-cols-5 text-center shrink-0 select-none z-30">
+            <button onclick="switchTab('feed')" id="tab-feed" class="flex flex-col justify-center items-center gap-0.5 font-bold accent-text">
+                <i data-lucide="sparkles" class="w-5 h-5"></i><span class="text-[10px]">Feed</span>
+            </button>
+            <button onclick="switchTab('match')" id="tab-match" class="flex flex-col justify-center items-center gap-0.5 text-neutral-400 font-medium">
+                <i data-lucide="arrow-left-right" class="w-5 h-5"></i><span class="text-[10px]">Match</span>
+            </button>
+            <button onclick="switchTab('saved')" id="tab-saved" class="flex flex-col justify-center items-center gap-0.5 text-neutral-400 font-medium">
+                <i data-lucide="bookmark" class="w-5 h-5"></i><span class="text-[10px]">Saved</span>
+            </button>
+            <button onclick="switchTab('chat')" id="tab-chat" class="flex flex-col justify-center items-center gap-0.5 text-neutral-400 font-medium relative">
+                <i data-lucide="message-square" class="w-5 h-5"></i><span class="text-[10px]">Chat</span>
+                <span class="absolute top-2 right-5 w-2 h-2 bg-rose-500 rounded-full"></span>
+            </button>
+            <button onclick="switchTab('profile')" id="tab-profile" class="flex flex-col justify-center items-center gap-0.5 text-neutral-400 font-medium">
+                <i data-lucide="user" class="w-5 h-5"></i><span class="text-[10px]">Profile</span>
+            </button>
+        </div>
+
+    </div>
+
+    <script>
+        // 1. Mock 核心模拟职位数据库
+        const MOCK_JOBS = [
+            {
+                id: "job-1",
+                title: "高级全栈开发工程师",
+                company: "米哈游 (miHoYo)",
+                salary: "28K - 40K",
+                commute: "22 分钟",
+                location: "徐汇区 · 漕河泾",
+                image: "https://images.unsplash.com/photo-1600132806370-bf17e65e942f?w=600&auto=format&fit=crop&q=80",
+                tags: ["游戏大厂", "React/Node", "Hybrid 办公", "16薪", "扁平管理"],
+                desc: "负责下一代游戏社区全栈核心业务及高并发中台演进开发。",
+                req: "1. 熟练掌握 React / Node.js 生产架构生态；\n2. 具备优秀的前端工程化治理及组件沉淀思维；\n3. 熟悉高复杂交互动效及性能指标极致调优。"
+            },
+            {
+                id: "job-2",
+                title: "AI 创新场景产品经理",
+                company: "小红书 (RED)",
+                salary: "25K - 38K",
+                commute: "35 分钟",
+                location: "黄浦区 · 新天地",
+                image: "https://images.unsplash.com/photo-1497366216548-37526070297c?w=600&auto=format&fit=crop&q=80",
+                tags: ["社交内容", "大模型落地", "5天工作制", "年终分红", "成长迅速"],
+                desc: "探索下一代大模型在原生社区中的可交互式与生成式社交工具场景。",
+                req: "1. 具有大模型相关 Agent、对话产品线 1 年以上核心落地实操经验；\n2. 能够独立输出高质量的交互 PRD，并具有敏锐的数据驱动闭环意识。"
+            },
+            {
+                id: "job-3",
+                title: "资深资深前端架构师",
+                company: "哔哩哔哩 (Bilibili)",
+                salary: "35K - 50K",
+                commute: "15 分钟",
+                location: "杨浦区 · 五角场",
+                image: "https://images.unsplash.com/photo-1542744094-3a31f103e35f?w=600&auto=format&fit=crop&q=80",
+                tags: ["视频文化", "WebGL/WebCodecs", "混合办公", "福利食堂", "六险一金"],
+                desc: "主导核心Web播放器、视频云端处理及中后台数据可视化渲染性能攻坚。",
+                req: "1. 对浏览器底层光栅化、渲染管线、图形处理技术有全面深刻的技术领悟；\n2. 负责大型核心复杂多包（Monorepo）依赖的持续链路重构治理。"
+            }
+        ];
+
+        let savedJobsList = [];
+        let activeChatSessionId = "";
+
+        // 2. 初始化核心生命周期
+        document.addEventListener("DOMContentLoaded", () => {
+            // 更新系统当前模拟时间
+            const updateTime = () => {
+                const now = new Date();
+                document.getElementById('current-time').innerText = 
+                    `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+            };
+            updateTime(); setInterval(updateTime, 60000);
+
+            // 初始化 Lucide 图标加载
+            lucide.createIcons();
+
+            // 渲染装载 Feed 卡片叠层
+            renderDeck();
+        });
+
+        // 3. Tab 主路由视图动态切换
+        function switchTab(targetView) {
+            const views = ['feed', 'match', 'saved', 'chat', 'profile'];
+            views.forEach(v => {
+                const el = document.getElementById(`view-${v}`);
+                const tabBtn = document.getElementById(`tab-${v}`);
+                if(v === targetView) {
+                    el.classList.remove('hidden');
+                    tabBtn.classList.add('accent-text', 'font-bold');
+                    tabBtn.classList.remove('text-neutral-400', 'font-medium');
+                } else {
+                    el.classList.add('hidden');
+                    tabBtn.classList.remove('accent-text', 'font-bold');
+                    tabBtn.classList.add('text-neutral-400', 'font-medium');
+                }
+            });
+            // 切回Chat如果没有打开会话，恢复列表页
+            if(targetView !== 'chat') { closeChatSession(); }
+        }
+
+        // Match 页面子 Tab 分流切换
+        function switchMatchSubTab(sub) {
+            ['hr', 'active', 'pending'].forEach(s => {
+                const block = document.getElementById(`match-sub-${s}`);
+                const btn = document.getElementById(`subtab-${s}`);
+                if(s === sub) {
+                    block.classList.remove('hidden');
+                    btn.className = "flex-1 py-2 text-xs font-bold rounded-lg bg-white shadow-sm transition-all text-center";
+                } else {
+                    block.classList.add('hidden');
+                    btn.className = "flex-1 py-2 text-xs font-medium text-neutral-600 rounded-lg transition-all text-center";
+                }
+            });
+        }
+
+        // Feed Filter 模式点击切换
+        function switchFilter(type) {
+            ['nearby', 'industry', 'score'].forEach(t => {
+                const btn = document.getElementById(`filter-${t}`);
+                if(t === type) {
+                    btn.className = "px-3.5 py-1.5 rounded-full text-xs font-bold bg-black text-white flex items-center gap-1 transition-all";
+                } else {
+                    btn.className = "px-3.5 py-1.5 rounded-full text-xs font-medium bg-white text-neutral-600 border border-neutral-200 flex items-center gap-1 transition-all";
+                }
+            });
+        }
+
+        // 4. FEED TINDER 卡片渲染渲染与拖拽核心交互引擎
+        function renderDeck() {
+            const deck = document.getElementById('deck');
+            // 清理除空状态提示外的残留旧节点卡片
+            const cards = deck.querySelectorAll('.swipe-card');
+            cards.forEach(c => c.remove());
+
+            if(MOCK_JOBS.length === 0) {
+                document.getElementById('empty-deck-state').classList.remove('hidden');
+                return;
+            } else {
+                document.getElementById('empty-deck-state').classList.add('hidden');
+            }
+
+            MOCK_JOBS.forEach((job, index) => {
+                const card = document.createElement('div');
+                card.className = "swipe-card bg-white rounded-2xl border border-neutral-200/60 shadow-md overflow-hidden flex flex-col";
+                card.id = `card-${job.id}`;
+                // 通过叠加 z-index 和缩放模拟层级物理堆叠感
+                card.style.zIndex = MOCK_JOBS.length - index;
+                if(index > 0) {
+                    card.style.transform = `scale(${1 - index * 0.04}) translateY(${index * 12}px)`;
+                    card.style.opacity = 1 - index * 0.2;
+                }
+
+                // 填充组件视图
+                card.innerHTML = `
+                    <div class="flash-overlay pass-overlay bg-rose-500/20"></div>
+                    <div class="flash-overlay interested-overlay bg-[#D2FF00]/30"></div>
+                    <div class="flash-overlay save-overlay bg-amber-500/20"></div>
+                    
+                    <div class="h-[40%] w-full relative bg-neutral-900 overflow-hidden shrink-0">
+                        <img class="w-full h-full object-cover opacity-90 select-none" src="${job.image}" pointer-events="none">
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+                        <div class="absolute bottom-3 left-4 right-4 flex justify-between items-center">
+                            <span class="text-white text-xs font-semibold bg-black/40 backdrop-blur-xs px-2.5 py-1 rounded-md border border-white/10">${job.company}</span>
+                            <span class="accent-bg text-black text-[11px] font-bold px-2 py-0.5 rounded-sm flex items-center gap-0.5">
+                                <i data-lucide="zap" class="w-2.5 h-2.5 fill-current"></i> 90%+ 匹配
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="flex-1 p-4 flex flex-col justify-between overflow-hidden" onclick="handleCardClick(event, '${job.id}')">
+                        <div>
+                            <div class="flex justify-between items-start gap-1">
+                                <h3 class="text-lg font-bold text-neutral-900 leading-snug truncate max-w-[70%]">${job.title}</h3>
+                                <span class="text-base font-extrabold text-neutral-900 tracking-tight shrink-0">${job.salary}</span>
+                            </div>
+                            
+                            <div class="flex items-center space-x-3 text-xs text-neutral-600 mt-1 font-medium">
+                                <span class="flex items-center text-black font-semibold bg-[#D2FF00]/20 px-1.5 py-0.5 rounded-sm">
+                                    <i data-lucide="subway" class="w-3 h-3 mr-0.5"></i> 地铁直达 ${job.commute}
+                                </span>
+                                <span class="flex items-center"><i data-lucide="map-pin" class="w-3 h-3 mr-0.5"></i>${job.location}</span>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-wrap gap-1.5 my-2 overflow-hidden max-h-[72px]">
+                            ${job.tags.map(t => `<span class="px-2 py-1 bg-neutral-100 text-neutral-600 text-[11px] font-medium rounded-md border border-neutral-200/30">${t}</span>`).join('')}
+                        </div>
+
+                        <p class="text-xs text-neutral-500 line-clamp-2 bg-neutral-50 p-2 rounded-lg border border-neutral-100">${job.desc}</p>
+                    </div>
+                `;
+
+                deck.appendChild(card);
+                setupSwipeGesture(card);
+            });
+            lucide.createIcons();
+        }
+
+        // 手势触控/鼠标拖拽引擎
+        function setupSwipeGesture(card) {
+            let startX = 0, startY = 0, moveX = 0, moveY = 0;
+            let isDragging = false;
+
+            const onStart = (e) => {
+                // 如果点击了卡片文本细节层导致Modal弹出，则不激活滑动
+                if(e.target.closest('.no-swipe')) return;
+                isDragging = true;
+                const clientX = e.clientX || e.touches[0].clientX;
+                const clientY = e.clientY || e.touches[0].clientY;
+                startX = clientX;
+                startY = clientY;
+                card.style.transition = 'none';
+            };
+
+            const onMove = (e) => {
+                if(!isDragging) return;
+                const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+                const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+                moveX = clientX - startX;
+                moveY = clientY - startY;
+
+                // 计算物理旋转倾斜
+                const rotation = moveX / 15;
+                card.style.transform = `translate(${moveX}px, ${moveY}px) rotate(${rotation}deg)`;
+
+                // 实时处理闪光覆盖层反馈
+                const passOverlay = card.querySelector('.pass-overlay');
+                const interestedOverlay = card.querySelector('.interested-overlay');
+                const saveOverlay = card.querySelector('.save-overlay');
+
+                if (moveY < -40 && Math.abs(moveX) < Math.abs(moveY)) { // 上滑收藏
+                    saveOverlay.style.opacity = Math.min(Math.abs(moveY) / 120, 1);
+                    passOverlay.style.opacity = 0;
+                    interestedOverlay.style.opacity = 0;
+                } else if (moveX > 0) { // 右滑感兴趣
+                    interestedOverlay.style.opacity = Math.min(moveX / 120, 1);
+                    passOverlay.style.opacity = 0;
+                    saveOverlay.style.opacity = 0;
+                } else if (moveX < 0) { // 左滑Pass
+                    passOverlay.style.opacity = Math.min(Math.abs(moveX) / 120, 1);
+                    interestedOverlay.style.opacity = 0;
+                    saveOverlay.style.opacity = 0;
+                }
+            };
+
+            const onEnd = () => {
+                if(!isDragging) return;
+                isDragging = false;
+                card.style.transition = 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.2s';
+                
+                const threshold = 110;
+                if (moveY < -threshold && Math.abs(moveX) < Math.abs(moveY)) {
+                    executeSwipeAction(card, 'save');
+                } else if (moveX > threshold) {
+                    executeSwipeAction(card, 'interested');
+                } else if (moveX < -threshold) {
+                    executeSwipeAction(card, 'pass');
+                } else {
+                    // 回弹弹性归位
+                    card.style.transform = 'translate(0, 0) rotate(0deg)';
+                    card.querySelectorAll('.flash-overlay').forEach(o => o.style.opacity = 0);
+                }
+                moveX = 0; moveY = 0;
+            };
+
+            // 监听鼠标事件
+            card.addEventListener('mousedown', onStart);
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onEnd);
+            // 监听移动端触摸事件
+            card.addEventListener('touchstart', onStart, {passive: true});
+            card.addEventListener('touchmove', onMove, {passive: true});
+            card.addEventListener('touchend', onEnd);
+        }
+
+        // 执行飞出视图物理卡片结算
+        function executeSwipeAction(card, action) {
+            const currentJob = MOCK_JOBS[0];
+            if(!currentJob) return;
+
+            if (action === 'interested') {
+                card.style.transform = 'translate(400px, 50px) rotate(30deg)';
+                card.style.opacity = '0';
+                // 模拟25%概率触发高潮交互 - 双向匹配弹窗
+                setTimeout(() => {
+                    if(currentJob.id === 'job-1' || Math.random() > 0.75) {
+                        triggerMatchSuccessAnimation();
+                    }
+                }, 200);
+            } else if (action === 'pass') {
+                card.style.transform = 'translate(-400px, 50px) rotate(-30deg)';
+                card.style.opacity = '0';
+            } else if (action === 'save') {
+                card.style.transform = 'translate(0, -500px)';
+                card.style.opacity = '0';
+                // 加入临时收藏列表
+                pushToSavedList(currentJob);
+            }
+
+            setTimeout(() => {
+                card.remove();
+                MOCK_JOBS.shift(); // 剔除数据栈顶
+                renderDeck();     // 刷新并重排后续底层卡片
+            }, 200);
+        }
+
+        // 外部按钮驱动的轻点卡片分发行程
+        function triggerSwipeAction(action) {
+            const topCard = document.querySelector('.swipe-card:first-child');
+            if(!topCard) return;
+            
+            topCard.style.transition = 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s';
+            executeSwipeAction(topCard, action);
+        }
+
+        // 5. CARD CLICK / DETAIL OVERLAY ENGINE
+        function handleCardClick(event, jobId) {
+            // 如果点到具体标签和文字，直接拉起完整JD详情层
+            const targetJob = [...MOCK_JOBS].find(j => j.id === jobId);
+            if(!targetJob) return;
+
+            const modalContent = document.getElementById('modal-detail-content');
+            modalContent.innerHTML = `
+                <div class="h-48 w-full rounded-2xl overflow-hidden shadow-inner my-2">
+                    <img class="w-full h-full object-cover" src="${targetJob.image}">
+                </div>
+                <div>
+                    <h2 class="text-2xl font-extrabold text-neutral-900">${targetJob.title}</h2>
+                    <div class="text-xl font-black text-neutral-800 mt-1">${targetJob.salary}</div>
+                    <div class="text-xs text-neutral-500 mt-1 font-medium flex gap-3">
+                        <span>公司: <b>${targetJob.company}</b></span>
+                        <span>地点: <b>${targetJob.location}</b></span>
+                    </div>
+                </div>
+                <hr class="border-neutral-200">
+                <div>
+                    <h4 class="font-bold text-xs text-neutral-400 uppercase tracking-wider mb-2">职位核心工作内容</h4>
+                    <p class="text-sm text-neutral-700 leading-relaxed whitespace-pre-line">${targetJob.desc}</p>
+                </div>
+                <div>
+                    <h4 class="font-bold text-xs text-neutral-400 uppercase tracking-wider mb-2">任职硬性资格要求</h4>
+                    <p class="text-sm text-neutral-700 leading-relaxed whitespace-pre-line">${targetJob.req}</p>
+                </div>
+                <div>
+                    <h4 class="font-bold text-xs text-neutral-400 uppercase tracking-wider mb-2">企业文化福利资产</h4>
+                    <div class="flex flex-wrap gap-2 pt-1">
+                        ${targetJob.tags.map(t => `<span class="px-2.5 py-1 bg-white border border-neutral-300/60 rounded-md text-xs font-medium text-neutral-700 shadow-2xs">${t}</span>`).join('')}
+                    </div>
+                </div>
+            `;
+            
+            const modal = document.getElementById('job-detail-modal');
+            modal.classList.remove('translate-y-full');
+        }
+
+        function closeJobDetail() {
+            document.getElementById('job-detail-modal').classList.add('translate-y-full');
+        }
+
+        // 6. SAVED 动态管理机制
+        function pushToSavedList(job) {
+            if(savedJobsList.some(j => j.id === job.id)) return;
+            savedJobsList.push(job);
+            
+            const container = document.getElementById('saved-list-container');
+            const row = document.createElement('div');
+            row.className = "bg-white p-4 rounded-2xl border border-neutral-100 shadow-sm flex justify-between items-center";
+            row.id = `saved-item-${job.id}`;
+            row.innerHTML = `
+                <div>
+                    <h4 class="font-bold text-sm text-neutral-800">${job.title}</h4>
+                    <p class="text-xs text-neutral-500 mt-0.5">${job.company} · ${job.location}</p>
+                    <span class="inline-block mt-2 px-2 py-0.5 bg-neutral-100 text-neutral-600 text-[10px] rounded font-medium">单程通勤: ${job.commute}</span>
+                </div>
+                <button onclick="applyFromSaved('${job.id}')" class="px-3 py-1.5 accent-bg text-black text-xs font-bold rounded-lg border border-black/10 shadow-xs">
+                    发送投递信号
+                </button>
+            `;
+            container.appendChild(row);
+        }
+
+        function applyFromSaved(jobId) {
+            document.getElementById(`saved-item-${jobId}`).remove();
+            savedJobsList = savedJobsList.filter(j => j.id !== jobId);
+            triggerMatchSuccessAnimation();
+        }
+
+        // 7. BLIND FIRST HR 匿名机制交互
+        function revealBlindHR(btn) {
+            const card = btn.closest('.bg-white');
+            const placeholder = card.querySelector('.blind-avatar-placeholder');
+            const avatar = card.querySelector('.blind-avatar');
+            const nameSpan = card.querySelector('.blind-name');
+
+            btn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> 正在解密解析...`;
+            lucide.createIcons();
+
+            setTimeout(() => {
+                placeholder.classList.add('hidden');
+                avatar.classList.remove('hidden');
+                nameSpan.innerText = "张丽敏 (Moka 团队负责人)";
+                btn.className = "flex-1 py-2 bg-emerald-100 text-emerald-800 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 border border-emerald-200";
+                btn.innerHTML = `<i data-lucide="unlock" class="w-3.5 h-3.5"></i> 已全面解锁`;
+                lucide.createIcons();
+            }, 800);
+        }
+
+        function triggerDirectMatch(roleName) {
+            triggerMatchSuccessAnimation();
+        }
+
+        // 8. DOUBLE MATCH 触发事件及弹层管理
+        function triggerMatchSuccessAnimation() {
+            const popup = document.getElementById('match-popup');
+            popup.classList.remove('hidden');
+            // 更新个人资料卡片计数器
+            document.getElementById('profile-match-count').innerText = "3";
+        }
+
+        function closeMatchPopup() {
+            document.getElementById('match-popup').classList.add('hidden');
+        }
+
+        function goToChatFromMatch() {
+            closeMatchPopup();
+            switchTab('chat');
+            openChatSession('米哈游-招聘组');
+        }
+
+        // 9. CHAT SESSION 独立会话动态聊天流管理
+        const MOCK_CHAT_HISTORIES = {
+            '米哈游-招聘组': {
+                title: "米哈游 · 招聘专员",
+                status: "Interview scheduled",
+                messages: [
+                    { sender: 'hr', time: '14:30', text: '您好！我们技术组评估了您在 GitHub 提交的跨平台架构治理开源项目，感觉与我们目前的岗位架构高度贴合。' },
+                    { sender: 'hr', time: '14:31', text: '请问这周二方便约一轮电话初试吗？大约耗时 20 分钟。' }
+                ]
+            },
+            '字节跳动HR-Line': {
+                title: "字节跳动 · 资深商业化 PM",
+                status: "Waiting feedback",
+                messages: [
+                    { sender: 'candidate', time: '昨天', text: '您好，我已经完成提交了第二轮的场景策略面，请问大概什么时候会有下一阶段结果更新呢？' },
+                    { sender: 'hr', time: '昨天', text: '业务leader正在高密集面评中，预计明天下午前我会同步最新状态给您！' }
+                ]
+            }
+        };
+
+        function openChatSession(sessionId) {
+            activeChatSessionId = sessionId;
+            const chatData = MOCK_CHAT_HISTORIES[sessionId];
+            if(!chatData) return;
+
+            document.getElementById('chat-title').innerText = chatData.title;
+            document.getElementById('chat-status-pill').innerText = chatData.status;
+
+            const stream = document.getElementById('chat-message-stream');
+            // 清理并保留初始小提示
+            stream.innerHTML = `<div class="flex justify-center"><span class="text-[10px] text-neutral-400 bg-neutral-200/50 px-2 py-0.5 rounded-full">已开启匿名通勤地理匹配隐私通道</span></div>`;
+
+            chatData.messages.forEach(msg => {
+                const row = document.createElement('div');
+                if(msg.sender === 'candidate') {
+                    row.className = "flex justify-end items-end space-x-2";
+                    row.innerHTML = `
+                        <div class="flex flex-col items-end max-w-[75%]">
+                            <div class="bg-black text-white text-xs p-3 rounded-2xl rounded-br-none shadow-xs leading-relaxed">${msg.text}</div>
+                            <span class="text-[9px] text-neutral-400 mt-1">${msg.time}</span>
+                        </div>
+                    `;
+                } else {
+                    row.className = "flex justify-start items-end space-x-2";
+                    row.innerHTML = `
+                        <div class="w-8 h-8 rounded-xl bg-neutral-800 text-white flex items-center justify-center font-mono text-[10px] shrink-0">HR</div>
+                        <div class="flex flex-col items-start max-w-[75%]">
+                            <div class="bg-white text-neutral-800 text-xs p-3 rounded-2xl rounded-bl-none shadow-xs border border-neutral-100 leading-relaxed">${msg.text}</div>
+                            <span class="text-[9px] text-neutral-400 mt-1">${msg.time}</span>
+                        </div>
+                    `;
+                }
+                stream.appendChild(row);
+            });
+
+            document.getElementById('chat-detail-view').classList.remove('hidden');
+            // 自动滚动到底部
+            stream.scrollTop = stream.scrollHeight;
+        }
+
+        function closeChatSession() {
+            document.getElementById('chat-detail-view').classList.add('hidden');
+            activeChatSessionId = "";
+        }
+
+        function sendMockChatMessage() {
+            const input = document.getElementById('chat-input-box');
+            const text = input.value.trim();
+            if(!text || !activeChatSessionId) return;
+
+            // 1. 同步压入本地模拟内存
+            MOCK_CHAT_HISTORIES[activeChatSessionId].messages.push({
+                sender: 'candidate',
+                time: '14:35',
+                text: text
+            });
+
+            // 2. 重新刷新局部会话对话流视图
+            openChatSession(activeChatSessionId);
+            input.value = "";
+
+            // 3. 模拟HR在 1 秒后自动给出收到答复的业务反馈反馈
+            setTimeout(() => {
+                if(activeChatSessionId) {
+                    MOCK_CHAT_HISTORIES[activeChatSessionId].messages.push({
+                        sender: 'hr',
+                        time: '14:36',
+                        text: '收到您的答复！我立刻帮您在内部招聘系统录入确认安排。'
+                    });
+                    openChatSession(activeChatSessionId);
+                }
+            }, 1000);
+        }
+    </script>
+</body>
+</html>
