@@ -18,11 +18,9 @@
         .accent-border { border-color: #D2FF00; }
         .accent-text { color: #111111; }
         
-        /* 隐藏滚动条 */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-        /* 卡片堆叠及动画效果 */
         .card-container {
             position: relative;
             height: 100%;
@@ -40,7 +38,6 @@
         }
         .swipe-card:active { cursor: grabbing; }
         
-        /* 闪光信号指示器 */
         .flash-overlay {
             position: absolute;
             top: 0; left: 0; right: 0; bottom: 0;
@@ -50,13 +47,61 @@
             transition: opacity 0.15s ease;
             z-index: 30;
         }
+
+        /* Filter panel slide-down */
+        .filter-panel {
+            overflow: hidden;
+            max-height: 0;
+            transition: max-height 0.3s ease, opacity 0.3s ease, margin 0.3s ease;
+            opacity: 0;
+            margin-bottom: 0;
+        }
+        .filter-panel.open {
+            max-height: 300px;
+            opacity: 1;
+            margin-bottom: 8px;
+        }
+
+        /* Bottom sheet for address picker */
+        .bottom-sheet {
+            position: absolute;
+            inset-x: 0;
+            bottom: 0;
+            background: #F6F3EE;
+            border-radius: 24px 24px 0 0;
+            z-index: 45;
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+            padding: 0 16px 24px;
+        }
+        .bottom-sheet.open {
+            transform: translateY(0);
+        }
+        .sheet-handle {
+            width: 40px; height: 4px;
+            background: #ccc; border-radius: 99px;
+            margin: 12px auto 16px;
+        }
+
+        /* Resume modal full screen */
+        #resume-modal {
+            position: absolute;
+            inset: 0;
+            background: #F6F3EE;
+            z-index: 60;
+            overflow-y: auto;
+            transform: translateY(100%);
+            transition: transform 0.35s cubic-bezier(0.32,0.72,0,1);
+        }
+        #resume-modal.open {
+            transform: translateY(0);
+        }
     </style>
 </head>
 <body class="flex justify-center items-center min-h-screen p-0 sm:p-4">
-
     <div class="relative w-full max-w-md h-screen sm:h-[844px] app-bg sm:rounded-[40px] shadow-2xl flex flex-col overflow-hidden border border-neutral-300/50">
         
-        <div class="px-6 pt-3 pb-2 flex justify-between items-center text-xs font-semibold text-neutral-800 shrink-0 select-none">
+        <div class="px-6 pt-3 pb-2 flex justify-between items-center text-xs font-semibold text-neutral-800 shrink-0 select-none z-50 bg-[#F6F3EE]">
             <span id="current-time">09:41</span>
             <div class="flex items-center space-x-1.5">
                 <i data-lucide="signal" class="w-3.5 h-3.5"></i>
@@ -77,19 +122,105 @@
             </div>
         </div>
 
+        <div id="address-sheet-overlay" class="absolute inset-0 bg-black/40 z-40 hidden transition-opacity duration-300 opacity-0" onclick="closeAddressSheet()"></div>
+        <div id="address-sheet" class="bottom-sheet shadow-[0_-10px_40px_rgba(0,0,0,0.1)]">
+            <div class="sheet-handle"></div>
+            <div class="px-5">
+                <h3 class="font-bold text-base text-neutral-900 mb-1">设置通勤起点</h3>
+                <p class="text-xs text-neutral-500 mb-4">系统将优先展示该地址附近的职位</p>
+                <div class="relative mb-3">
+                    <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400"></i>
+                    <input type="text" id="address-input" placeholder="搜索小区、地铁站或写字楼..." 
+                        class="w-full bg-white border border-neutral-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-black">
+                </div>
+                <div class="space-y-2 mb-4">
+                    <button onclick="selectAddress('当前位置')" class="w-full flex items-center gap-3 p-3 bg-white rounded-xl border border-neutral-200 hover:border-black transition-colors text-left">
+                        <span class="w-8 h-8 rounded-lg bg-[#D2FF00] flex items-center justify-center shrink-0"><i data-lucide="navigation" class="w-4 h-4 text-black"></i></span>
+                        <div><div class="text-sm font-semibold text-neutral-800">使用当前位置</div><div class="text-xs text-neutral-500">自动获取 GPS 定位</div></div>
+                    </button>
+                    <button onclick="selectAddress('上海市徐汇区漕河泾开发区')" class="w-full flex items-center gap-3 p-3 bg-white rounded-xl border border-neutral-200 hover:border-black transition-colors text-left">
+                        <span class="w-8 h-8 rounded-lg bg-neutral-100 flex items-center justify-center shrink-0"><i data-lucide="home" class="w-4 h-4 text-neutral-500"></i></span>
+                        <div><div class="text-sm font-semibold text-neutral-800">家 · 漕河泾开发区</div><div class="text-xs text-neutral-500">上海市徐汇区</div></div>
+                    </button>
+                    <button onclick="selectAddress('上海市黄浦区新天地')" class="w-full flex items-center gap-3 p-3 bg-white rounded-xl border border-neutral-200 hover:border-black transition-colors text-left">
+                        <span class="w-8 h-8 rounded-lg bg-neutral-100 flex items-center justify-center shrink-0"><i data-lucide="map-pin" class="w-4 h-4 text-neutral-500"></i></span>
+                        <div><div class="text-sm font-semibold text-neutral-800">新天地</div><div class="text-xs text-neutral-500">上海市黄浦区</div></div>
+                    </button>
+                </div>
+                <button onclick="confirmAddress()" class="w-full mt-2 py-3 bg-black text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform">
+                    <i data-lucide="check" class="w-4 h-4 text-[#D2FF00]"></i> 确认并开始匹配
+                </button>
+            </div>
+        </div>
+
         <div id="main-content" class="flex-1 overflow-hidden relative flex flex-col">
             
             <div id="view-feed" class="flex-1 flex flex-col overflow-hidden px-4 pb-4">
-                <div class="flex items-center space-x-2 my-3 select-none shrink-0">
-                    <button onclick="switchFilter('nearby')" id="filter-nearby" class="px-3.5 py-1.5 rounded-full text-xs font-bold bg-black text-white flex items-center gap-1 transition-all">
-                        <i data-lucide="map-pin" class="w-3 h-3"></i> Nearby 通勤模式
+                <div class="flex items-center space-x-2 my-3 select-none shrink-0 overflow-x-auto no-scrollbar">
+                    <button onclick="switchFilter('nearby')" id="filter-nearby" class="px-3.5 py-1.5 rounded-full text-xs font-bold bg-black text-white flex items-center gap-1 transition-all shrink-0">
+                        <i data-lucide="map-pin" class="w-3 h-3"></i> Nearby 通勤
                     </button>
-                    <button onclick="switchFilter('industry')" id="filter-industry" class="px-3.5 py-1.5 rounded-full text-xs font-medium bg-white text-neutral-600 border border-neutral-200 flex items-center gap-1 transition-all">
+                    <button onclick="switchFilter('industry')" id="filter-industry" class="px-3.5 py-1.5 rounded-full text-xs font-medium bg-white text-neutral-600 border border-neutral-200 flex items-center gap-1 transition-all shrink-0">
                         <i data-lucide="briefcase" class="w-3 h-3"></i> Industry 行业
                     </button>
-                    <button onclick="switchFilter('score')" id="filter-score" class="px-3.5 py-1.5 rounded-full text-xs font-medium bg-white text-neutral-600 border border-neutral-200 flex items-center gap-1 transition-all">
-                        <i data-lucide="sparkles" class="w-3 h-3"></i> Match Score AI匹配
+                    <button onclick="switchFilter('score')" id="filter-score" class="px-3.5 py-1.5 rounded-full text-xs font-medium bg-white text-neutral-600 border border-neutral-200 flex items-center gap-1 transition-all shrink-0">
+                        <i data-lucide="sparkles" class="w-3 h-3"></i> AI 匹配
                     </button>
+                </div>
+
+                <div id="panel-nearby" class="filter-panel open">
+                    <div class="bg-white rounded-2xl border border-neutral-200 p-3 space-y-2 shadow-sm">
+                        <button onclick="openAddressSheet()" class="w-full flex items-center gap-2.5 p-2.5 rounded-xl bg-neutral-50 border border-neutral-200 hover:border-black transition-colors text-left">
+                            <i data-lucide="map-pin" class="w-4 h-4 text-neutral-500 shrink-0"></i>
+                            <div class="flex-1 min-w-0">
+                                <div class="text-[10px] text-neutral-400">通勤起点</div>
+                                <div class="text-sm font-semibold text-neutral-800 truncate" id="selected-address-label">漕河泾开发区 (点击更改)</div>
+                            </div>
+                            <i data-lucide="chevron-right" class="w-4 h-4 text-neutral-400 shrink-0"></i>
+                        </button>
+                        <div class="flex items-center justify-between px-1">
+                            <span class="text-xs text-neutral-500">最大通勤时间</span>
+                            <span class="text-xs font-bold text-black" id="feed-commute-val">45 分钟</span>
+                        </div>
+                        <input type="range" min="15" max="90" value="45" step="5"
+                            oninput="document.getElementById('feed-commute-val').innerText = this.value + ' 分钟'"
+                            class="w-full accent-black h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer">
+                    </div>
+                </div>
+
+                <div id="panel-industry" class="filter-panel">
+                    <div class="bg-white rounded-2xl border border-neutral-200 p-3 space-y-3 shadow-sm">
+                        <div>
+                            <div class="text-xs font-semibold text-neutral-500 mb-2">行业类型</div>
+                            <div class="flex flex-wrap gap-1.5" id="industry-chips">
+                                <button onclick="toggleChip(this)" class="px-2.5 py-1 rounded-full text-xs font-medium bg-black text-white border border-black transition-all">全部</button>
+                                <button onclick="toggleChip(this)" class="px-2.5 py-1 rounded-full text-xs font-medium bg-neutral-100 text-neutral-600 border border-neutral-200 transition-all">互联网</button>
+                                <button onclick="toggleChip(this)" class="px-2.5 py-1 rounded-full text-xs font-medium bg-neutral-100 text-neutral-600 border border-neutral-200 transition-all">游戏</button>
+                                <button onclick="toggleChip(this)" class="px-2.5 py-1 rounded-full text-xs font-medium bg-neutral-100 text-neutral-600 border border-neutral-200 transition-all">金融</button>
+                                <button onclick="toggleChip(this)" class="px-2.5 py-1 rounded-full text-xs font-medium bg-neutral-100 text-neutral-600 border border-neutral-200 transition-all">消费品</button>
+                                <button onclick="toggleChip(this)" class="px-2.5 py-1 rounded-full text-xs font-medium bg-neutral-100 text-neutral-600 border border-neutral-200 transition-all">新能源</button>
+                            </div>
+                        </div>
+                        <div class="border-t border-neutral-100 pt-2">
+                            <div class="text-xs font-semibold text-neutral-500 mb-2">工作类型</div>
+                            <div class="flex flex-wrap gap-1.5" id="jobtype-chips">
+                                <button onclick="toggleChip(this)" class="px-2.5 py-1 rounded-full text-xs font-medium bg-black text-white border border-black transition-all">全部</button>
+                                <button onclick="toggleChip(this)" class="px-2.5 py-1 rounded-full text-xs font-medium bg-neutral-100 text-neutral-600 border border-neutral-200 transition-all">全职</button>
+                                <button onclick="toggleChip(this)" class="px-2.5 py-1 rounded-full text-xs font-medium bg-neutral-100 text-neutral-600 border border-neutral-200 transition-all">远程</button>
+                                <button onclick="toggleChip(this)" class="px-2.5 py-1 rounded-full text-xs font-medium bg-neutral-100 text-neutral-600 border border-neutral-200 transition-all">双休</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="panel-score" class="filter-panel">
+                    <div class="bg-white rounded-2xl border border-neutral-200 p-3 flex items-center gap-2.5 shadow-sm">
+                        <span class="w-8 h-8 rounded-lg accent-bg flex items-center justify-center shrink-0"><i data-lucide="sparkles" class="w-4 h-4 text-black"></i></span>
+                        <div>
+                            <div class="text-sm font-semibold text-neutral-800">AI 根据简历自动匹配</div>
+                            <div class="text-xs text-neutral-500">优先展示与你简历高度契合的岗位</div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="flex-1 relative mb-4">
@@ -99,11 +230,10 @@
                                 <i data-lucide="refresh-cw" class="w-6 h-6 text-neutral-400"></i>
                             </div>
                             <h3 class="text-neutral-800 font-semibold mb-1">附近的职位都刷完啦</h3>
-                            <p class="text-neutral-500 text-xs">调整你的通勤时间范围或求职偏好再试试看吧</p>
+                            <p class="text-neutral-500 text-xs">调整筛选条件再试试看</p>
                         </div>
                     </div>
                 </div>
-
                 <div class="flex justify-center items-center space-x-6 pb-2 shrink-0 select-none">
                     <button onclick="triggerSwipeAction('pass')" class="w-12 h-12 rounded-full bg-white shadow-md flex items-center justify-center border border-neutral-100 hover:scale-105 active:scale-95 transition-transform group">
                         <i data-lucide="x" class="w-6 h-6 text-rose-500 group-hover:stroke-[3]"></i>
@@ -123,7 +253,6 @@
                     <button onclick="switchMatchSubTab('active')" id="subtab-active" class="flex-1 py-2 text-xs font-medium text-neutral-600 rounded-lg transition-all text-center">双向匹配 (2)</button>
                     <button onclick="switchMatchSubTab('pending')" id="subtab-pending" class="flex-1 py-2 text-xs font-medium text-neutral-600 rounded-lg transition-all text-center">单向等待</button>
                 </div>
-
                 <div id="match-sub-hr" class="flex-1 overflow-y-auto no-scrollbar pb-6 space-y-3">
                     <div class="flex items-center justify-between text-xs text-neutral-500 font-medium px-1 select-none">
                         <span>以下HR对你表达了兴趣（已隐藏敏感身份）</span>
@@ -144,9 +273,9 @@
                             </div>
                         </div>
                         <div class="space-y-1.5 mb-4">
-                            <div class="text-xs text-neutral-600 flex items-center gap-1"><span class="font-semibold text-neutral-700">技术画像:</span> React / WebGL / Next.js / 团队重构经验</div>
-                            <div class="text-xs text-neutral-600 flex items-center gap-1"><span class="font-semibold text-neutral-700">核心背景:</span> 出海头部大厂 3年+ / 具有从0到1带队履历</div>
-                            <div class="text-xs text-neutral-600 flex items-center gap-1"><span class="font-semibold text-neutral-700">提供预期:</span> 25K - 35K · 班车直达 · 弹性工作</div>
+                            <div class="text-xs text-neutral-600"><span class="font-semibold text-neutral-700">技术画像:</span> React / WebGL / Next.js / 团队重构经验</div>
+                            <div class="text-xs text-neutral-600"><span class="font-semibold text-neutral-700">核心背景:</span> 出海头部大厂 3年+ / 具有从0到1带队履历</div>
+                            <div class="text-xs text-neutral-600"><span class="font-semibold text-neutral-700">提供预期:</span> 25K - 35K · 班车直达 · 弹性工作</div>
                         </div>
                         <div class="flex space-x-2">
                             <button onclick="revealBlindHR(this)" class="flex-1 py-2 bg-neutral-100 text-neutral-800 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 border border-neutral-200">
@@ -158,7 +287,6 @@
                         </div>
                     </div>
                 </div>
-
                 <div id="match-sub-active" class="flex-1 overflow-y-auto no-scrollbar pb-6 space-y-3 hidden">
                     <div class="bg-white p-4 rounded-2xl border border-neutral-100 shadow-sm flex justify-between items-center">
                         <div class="flex items-center space-x-3">
@@ -173,7 +301,6 @@
                         </button>
                     </div>
                 </div>
-
                 <div id="match-sub-pending" class="flex-1 overflow-y-auto no-scrollbar pb-6 text-center pt-12 hidden">
                     <i data-lucide="hourglass" class="w-8 h-8 text-neutral-300 mx-auto mb-2 animate-pulse"></i>
                     <p class="text-xs text-neutral-500">还有 3 个职位正在等待对方 HR 确认反馈</p>
@@ -184,12 +311,34 @@
                 <div class="flex items-center justify-between my-3 select-none shrink-0">
                     <h2 class="text-lg font-bold text-neutral-900">收藏夹</h2>
                     <div class="flex space-x-1 text-xs bg-white border border-neutral-200 rounded-lg p-0.5">
-                        <button class="px-3 py-1 font-bold bg-neutral-100 rounded-md">职位</button>
-                        <button class="px-3 py-1 text-neutral-500">企业</button>
+                        <button onclick="switchSavedTab('job')" id="saved-tab-job" class="px-3 py-1 font-bold bg-neutral-100 rounded-md">职位</button>
+                        <button onclick="switchSavedTab('company')" id="saved-tab-company" class="px-3 py-1 text-neutral-500 rounded-md">企业</button>
+                    </div>
+                </div>
+                <div class="mb-3 shrink-0 space-y-2">
+                    <div class="overflow-x-auto no-scrollbar">
+                        <div class="flex gap-1.5 w-max">
+                            <button onclick="toggleChip(this)" class="px-2.5 py-1 rounded-full text-xs font-medium bg-black text-white border border-black transition-all shrink-0">全部行业</button>
+                            <button onclick="toggleChip(this)" class="px-2.5 py-1 rounded-full text-xs font-medium bg-white text-neutral-600 border border-neutral-200 transition-all shrink-0">互联网</button>
+                            <button onclick="toggleChip(this)" class="px-2.5 py-1 rounded-full text-xs font-medium bg-white text-neutral-600 border border-neutral-200 transition-all shrink-0">游戏</button>
+                            <button onclick="toggleChip(this)" class="px-2.5 py-1 rounded-full text-xs font-medium bg-white text-neutral-600 border border-neutral-200 transition-all shrink-0">新能源</button>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-neutral-400 shrink-0">排序：</span>
+                        <div class="flex gap-1.5">
+                            <button onclick="toggleChip(this)" class="px-2.5 py-1 rounded-full text-xs font-medium bg-black text-white border border-black transition-all">最新收藏</button>
+                            <button onclick="toggleChip(this)" class="px-2.5 py-1 rounded-full text-xs font-medium bg-white text-neutral-600 border border-neutral-200 transition-all">活跃度</button>
+                            <button onclick="toggleChip(this)" class="px-2.5 py-1 rounded-full text-xs font-medium bg-white text-neutral-600 border border-neutral-200 transition-all">距离</button>
+                        </div>
                     </div>
                 </div>
                 <div id="saved-list-container" class="flex-1 overflow-y-auto no-scrollbar pb-6 space-y-3">
+                    <div id="saved-empty" class="text-center pt-12">
+                        <i data-lucide="bookmark" class="w-8 h-8 text-neutral-300 mx-auto mb-2"></i>
+                        <p class="text-xs text-neutral-500">上滑卡片可将职位加入收藏夹</p>
                     </div>
+                </div>
             </div>
 
             <div id="view-chat" class="flex-1 flex flex-col overflow-hidden hidden">
@@ -203,9 +352,7 @@
                                     <span class="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 rounded-full border-2 border-white flex items-center justify-center text-[8px] text-white font-bold">1</span>
                                 </div>
                                 <div class="overflow-hidden">
-                                    <div class="flex items-center justify-between">
-                                        <h4 class="font-bold text-sm text-neutral-800 truncate">米哈游 · 游戏海外运营</h4>
-                                    </div>
+                                    <h4 class="font-bold text-sm text-neutral-800 truncate">米哈游 · 游戏海外运营</h4>
                                     <p class="text-xs text-neutral-500 truncate mt-0.5">HR: 看到您的简历非常契合，请问这周二方便约一轮电话初试吗？</p>
                                 </div>
                             </div>
@@ -216,7 +363,6 @@
                         </div>
                     </div>
                 </div>
-
                 <div id="chat-detail-view" class="absolute inset-0 bg-[#F6F3EE] z-20 flex flex-col hidden">
                     <div class="px-4 py-3 bg-white border-b border-neutral-200 flex items-center justify-between shrink-0">
                         <div class="flex items-center space-x-3">
@@ -229,13 +375,11 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="px-2 py-1 bg-amber-500/10 text-amber-700 text-[10px] font-bold rounded-md border border-amber-500/20" id="chat-status-pill">
-                            Interview scheduled
-                        </div>
+                        <div class="px-2 py-1 bg-amber-500/10 text-amber-700 text-[10px] font-bold rounded-md border border-amber-500/20" id="chat-status-pill">Interview scheduled</div>
                     </div>
                     <div id="chat-message-stream" class="flex-1 overflow-y-auto no-scrollbar p-4 space-y-4">
                         <div class="flex justify-center"><span class="text-[10px] text-neutral-400 bg-neutral-200/50 px-2 py-0.5 rounded-full">系统已安全加密沟通通道</span></div>
-                        </div>
+                    </div>
                     <div class="p-3 bg-white border-t border-neutral-200 flex items-center space-x-2 shrink-0">
                         <input id="chat-input-box" type="text" placeholder="发送你的答复..." class="flex-1 bg-neutral-100 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-black">
                         <button onclick="sendMockChatMessage()" class="w-10 h-10 accent-bg rounded-xl flex items-center justify-center border border-black/10 text-black hover:opacity-90 active:scale-95 transition-all">
@@ -246,57 +390,75 @@
             </div>
 
             <div id="view-profile" class="flex-1 flex flex-col overflow-hidden px-4 hidden">
-                <div class="flex-1 overflow-y-auto no-scrollbar pb-6">
-                    <div class="bg-white p-5 rounded-2xl border border-neutral-200/60 shadow-sm mt-4 text-center relative overflow-hidden">
-                        <div class="absolute top-3 right-3 text-neutral-400 cursor-pointer"><i data-lucide="edit-3" class="w-4 h-4"></i></div>
-                        <div class="w-20 h-20 bg-neutral-900 rounded-full mx-auto mb-3 flex items-center justify-center text-white font-bold text-xl ring-4 ring-[#D2FF00]/30">
-                            简历
+                <div class="flex-1 overflow-y-auto no-scrollbar pb-6 pt-2">
+                    <h2 class="text-xl font-bold text-neutral-900 mb-4 select-none">我的档案</h2>
+                    <div class="bg-white p-5 rounded-2xl border border-neutral-200/60 shadow-sm text-center relative overflow-hidden mb-4">
+                        <div class="absolute top-3 right-3 text-neutral-400 cursor-pointer p-1"><i data-lucide="edit-3" class="w-4 h-4"></i></div>
+                        <div class="w-16 h-16 bg-neutral-900 rounded-full mx-auto mb-3 flex items-center justify-center text-[#D2FF00] font-bold text-lg ring-4 ring-[#D2FF00]/30 overflow-hidden">
+                            <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=60" alt="" class="w-full h-full object-cover">
                         </div>
-                        <h3 class="font-bold text-lg text-neutral-800">求职者 (模拟账户)</h3>
+                        <h3 class="font-bold text-lg text-neutral-800">李华 (开发者)</h3>
                         <p class="text-xs text-neutral-500 mt-0.5">全栈开发工程师 · 3年工作经验</p>
                         <div class="inline-flex items-center gap-1.5 mt-3 px-3 py-1 bg-emerald-500/10 text-emerald-700 text-xs font-semibold rounded-full border border-emerald-500/20">
-                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> 积极寻求新机会
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> 积极寻求新机会
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-4 gap-2 my-4 text-center">
-                        <div class="bg-white p-2 rounded-xl border border-neutral-100 shadow-2xs"><div class="font-bold text-sm text-neutral-800">128</div><div class="text-[9px] text-neutral-400 mt-0.5">浏览过</div></div>
-                        <div class="bg-white p-2 rounded-xl border border-neutral-100 shadow-2xs"><div class="font-bold text-sm text-neutral-800">34</div><div class="text-[9px] text-neutral-400 mt-0.5">投递意向</div></div>
-                        <div class="bg-white p-2 rounded-xl border border-neutral-100 shadow-2xs"><div class="font-bold text-sm text-neutral-800" id="profile-match-count">2</div><div class="text-[9px] text-neutral-400 mt-0.5">成功匹配</div></div>
-                        <div class="bg-white p-2 rounded-xl border border-neutral-100 shadow-2xs"><div class="font-bold text-sm text-neutral-800 text-lime-600">1</div><div class="text-[9px] text-neutral-400 mt-0.5">收到Offer</div></div>
+                    <div class="grid grid-cols-4 gap-2 mb-4 text-center">
+                        <div class="bg-white py-3 px-1 rounded-xl border border-neutral-100 shadow-sm"><div class="font-bold text-sm text-neutral-800">128</div><div class="text-[9px] text-neutral-400 mt-1">浏览过</div></div>
+                        <div class="bg-white py-3 px-1 rounded-xl border border-neutral-100 shadow-sm"><div class="font-bold text-sm text-neutral-800">34</div><div class="text-[9px] text-neutral-400 mt-1">投递意向</div></div>
+                        <div class="bg-white py-3 px-1 rounded-xl border border-neutral-100 shadow-sm"><div class="font-bold text-sm text-neutral-800" id="profile-match-count">2</div><div class="text-[9px] text-neutral-400 mt-1">成功匹配</div></div>
+                        <div class="bg-white py-3 px-1 rounded-xl border border-neutral-100 shadow-sm accent-bg"><div class="font-bold text-sm text-black">1</div><div class="text-[9px] text-neutral-700 mt-1 font-medium">收到 Offer</div></div>
                     </div>
 
-                    <div class="bg-white p-4 rounded-2xl border border-neutral-200/60 shadow-sm space-y-3">
-                        <h4 class="font-bold text-xs text-neutral-400 uppercase tracking-wider flex items-center gap-1"><i data-lucide="sliders" class="w-3.5 h-3.5"></i> 地理与期望求职偏好</h4>
-                        <div class="space-y-2.5">
-                            <div>
-                                <div class="flex justify-between text-xs text-neutral-600 mb-1"><span>理想通勤上限时间 (单程)</span><span class="font-bold text-black" id="commute-val">45 分钟</span></div>
-                                <input type="range" min="15" max="90" value="45" oninput="document.getElementById('commute-val').innerText = this.value + ' 分钟'" class="w-full accent-black h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer">
+                    <div class="bg-white p-4 rounded-2xl border border-neutral-200/60 shadow-sm mb-4">
+                        <h4 class="font-bold text-xs text-neutral-400 uppercase tracking-wider flex items-center gap-1.5 mb-3"><i data-lucide="sliders" class="w-3.5 h-3.5"></i> 求职偏好 (影响 AI 匹配)</h4>
+                        <div class="space-y-3">
+                            <div class="flex justify-between items-center text-sm">
+                                <span class="text-neutral-600">期望岗位</span>
+                                <span class="font-semibold text-neutral-900">前端开发 / 全栈开发</span>
                             </div>
                             <hr class="border-neutral-100">
-                            <div class="flex justify-between items-center text-xs text-neutral-700">
-                                <span>期望薪资目标范围</span>
-                                <span class="font-bold text-black bg-neutral-100 px-2 py-0.5 rounded-md">25K - 35K /月</span>
+                            <div class="flex justify-between items-center text-sm">
+                                <span class="text-neutral-600">期望薪资</span>
+                                <span class="font-semibold text-neutral-900 bg-neutral-100 px-2 py-0.5 rounded-md">25K - 35K</span>
                             </div>
-                            <div class="flex justify-between items-center text-xs text-neutral-700">
-                                <span>工作机制模式偏好</span>
-                                <span class="font-bold text-black bg-neutral-100 px-2 py-0.5 rounded-md">Hybrid (混合办公)</span>
+                            <hr class="border-neutral-100">
+                            <div class="flex justify-between items-center text-sm">
+                                <span class="text-neutral-600">期望通勤 (单程)</span>
+                                <span class="font-semibold text-neutral-900 flex items-center gap-1"><i data-lucide="subway" class="w-3.5 h-3.5"></i> 45分钟内</span>
+                            </div>
+                            <hr class="border-neutral-100">
+                            <div class="flex justify-between items-center text-sm">
+                                <span class="text-neutral-600">工作制度</span>
+                                <span class="font-semibold text-neutral-900">Hybrid / 双休</span>
                             </div>
                         </div>
                     </div>
+
+                    <button class="w-full bg-black text-white p-4 rounded-2xl shadow-md flex items-center justify-between group active:scale-95 transition-transform">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-neutral-800 flex items-center justify-center"><i data-lucide="file-text" class="w-5 h-5 text-[#D2FF00]"></i></div>
+                            <div class="text-left">
+                                <div class="text-sm font-bold">管理在线简历</div>
+                                <div class="text-[10px] text-neutral-400 mt-0.5">基于 AI 解析，已完成结构化 95%</div>
+                            </div>
+                        </div>
+                        <i data-lucide="chevron-right" class="w-5 h-5 text-neutral-500 group-hover:text-white transition-colors"></i>
+                    </button>
                 </div>
             </div>
 
-            <div id="job-detail-modal" class="absolute inset-x-0 bottom-0 top-12 bg-[#F6F3EE] rounded-t-[24px] z-40 flex flex-col translate-y-full transition-transform duration-300 shadow-2xl">
+            <div id="job-detail-modal" class="absolute inset-x-0 bottom-0 top-12 bg-[#F6F3EE] rounded-t-[24px] z-40 flex flex-col translate-y-full transition-transform duration-300 shadow-[0_-20px_50px_rgba(0,0,0,0.15)]">
                 <div onclick="closeJobDetail()" class="w-full py-3 flex justify-center items-center cursor-pointer shrink-0">
                     <div class="w-12 h-1.5 bg-neutral-300 rounded-full"></div>
                 </div>
-                <div class="flex-1 overflow-y-auto no-scrollbar px-5 pb-24 space-y-4" id="modal-detail-content">
+                <div class="flex-1 overflow-y-auto no-scrollbar px-5 pb-24 space-y-5" id="modal-detail-content">
                     </div>
                 <div class="absolute bottom-0 inset-x-0 p-4 bg-gradient-to-t from-[#F6F3EE] via-[#F6F3EE] to-transparent shrink-0 flex space-x-3">
-                    <button onclick="closeJobDetail(); triggerSwipeAction('pass');" class="px-4 py-3 bg-white border border-neutral-200 text-neutral-700 font-semibold rounded-xl text-sm shadow-sm">拒绝不考虑</button>
-                    <button onclick="closeJobDetail(); triggerSwipeAction('interested');" class="flex-1 py-3 accent-bg text-black font-bold rounded-xl text-sm flex items-center justify-center gap-2 border border-black/10 shadow-sm">
-                        <i data-lucide="zap" class="w-4 h-4 fill-current"></i> 发出双向直投信号
+                    <button onclick="closeJobDetail(); triggerSwipeAction('pass');" class="px-4 py-3 bg-white border border-neutral-200 text-neutral-700 font-semibold rounded-xl text-sm shadow-sm active:scale-95 transition-transform">拒绝</button>
+                    <button onclick="closeJobDetail(); triggerSwipeAction('interested');" class="flex-1 py-3 accent-bg text-black font-bold rounded-xl text-sm flex items-center justify-center gap-2 shadow-sm active:scale-95 transition-transform">
+                        <i data-lucide="zap" class="w-4 h-4 fill-current"></i> 发出投递信号
                     </button>
                 </div>
             </div>
@@ -315,7 +477,7 @@
             </button>
             <button onclick="switchTab('chat')" id="tab-chat" class="flex flex-col justify-center items-center gap-0.5 text-neutral-400 font-medium relative">
                 <i data-lucide="message-square" class="w-5 h-5"></i><span class="text-[10px]">Chat</span>
-                <span class="absolute top-2 right-5 w-2 h-2 bg-rose-500 rounded-full"></span>
+                <span class="absolute top-2 right-5 w-2 h-2 bg-rose-500 rounded-full border-2 border-white"></span>
             </button>
             <button onclick="switchTab('profile')" id="tab-profile" class="flex flex-col justify-center items-center gap-0.5 text-neutral-400 font-medium">
                 <i data-lucide="user" class="w-5 h-5"></i><span class="text-[10px]">Profile</span>
@@ -325,41 +487,29 @@
     </div>
 
     <script>
-        // 1. Mock 核心模拟职位数据库
+        // 1. Mock Data
         const MOCK_JOBS = [
             {
-                id: "job-1",
-                title: "高级全栈开发工程师",
-                company: "米哈游 (miHoYo)",
-                salary: "28K - 40K",
-                commute: "22 分钟",
-                location: "徐汇区 · 漕河泾",
+                id: "job-1", title: "高级全栈开发工程师", company: "米哈游 (miHoYo)",
+                salary: "28K - 40K", commute: "22 分钟", location: "徐汇区 · 漕河泾",
                 image: "https://images.unsplash.com/photo-1600132806370-bf17e65e942f?w=600&auto=format&fit=crop&q=80",
                 tags: ["游戏大厂", "React/Node", "Hybrid 办公", "16薪", "扁平管理"],
                 desc: "负责下一代游戏社区全栈核心业务及高并发中台演进开发。",
                 req: "1. 熟练掌握 React / Node.js 生产架构生态；\n2. 具备优秀的前端工程化治理及组件沉淀思维；\n3. 熟悉高复杂交互动效及性能指标极致调优。"
             },
             {
-                id: "job-2",
-                title: "AI 创新场景产品经理",
-                company: "小红书 (RED)",
-                salary: "25K - 38K",
-                commute: "35 分钟",
-                location: "黄浦区 · 新天地",
+                id: "job-2", title: "AI 创新场景产品经理", company: "小红书 (RED)",
+                salary: "25K - 38K", commute: "35 分钟", location: "黄浦区 · 新天地",
                 image: "https://images.unsplash.com/photo-1497366216548-37526070297c?w=600&auto=format&fit=crop&q=80",
                 tags: ["社交内容", "大模型落地", "5天工作制", "年终分红", "成长迅速"],
                 desc: "探索下一代大模型在原生社区中的可交互式与生成式社交工具场景。",
                 req: "1. 具有大模型相关 Agent、对话产品线 1 年以上核心落地实操经验；\n2. 能够独立输出高质量的交互 PRD，并具有敏锐的数据驱动闭环意识。"
             },
             {
-                id: "job-3",
-                title: "资深资深前端架构师",
-                company: "哔哩哔哩 (Bilibili)",
-                salary: "35K - 50K",
-                commute: "15 分钟",
-                location: "杨浦区 · 五角场",
+                id: "job-3", title: "资深资深前端架构师", company: "哔哩哔哩 (Bilibili)",
+                salary: "35K - 50K", commute: "15 分钟", location: "杨浦区 · 五角场",
                 image: "https://images.unsplash.com/photo-1542744094-3a31f103e35f?w=600&auto=format&fit=crop&q=80",
-                tags: ["视频文化", "WebGL/WebCodecs", "混合办公", "福利食堂", "六险一金"],
+                tags: ["视频文化", "WebGL", "混合办公", "福利食堂", "六险一金"],
                 desc: "主导核心Web播放器、视频云端处理及中后台数据可视化渲染性能攻坚。",
                 req: "1. 对浏览器底层光栅化、渲染管线、图形处理技术有全面深刻的技术领悟；\n2. 负责大型核心复杂多包（Monorepo）依赖的持续链路重构治理。"
             }
@@ -368,24 +518,19 @@
         let savedJobsList = [];
         let activeChatSessionId = "";
 
-        // 2. 初始化核心生命周期
+        // Initialization
         document.addEventListener("DOMContentLoaded", () => {
-            // 更新系统当前模拟时间
             const updateTime = () => {
                 const now = new Date();
                 document.getElementById('current-time').innerText = 
                     `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
             };
             updateTime(); setInterval(updateTime, 60000);
-
-            // 初始化 Lucide 图标加载
             lucide.createIcons();
-
-            // 渲染装载 Feed 卡片叠层
             renderDeck();
         });
 
-        // 3. Tab 主路由视图动态切换
+        // Tab Switching
         function switchTab(targetView) {
             const views = ['feed', 'match', 'saved', 'chat', 'profile'];
             views.forEach(v => {
@@ -401,11 +546,10 @@
                     tabBtn.classList.add('text-neutral-400', 'font-medium');
                 }
             });
-            // 切回Chat如果没有打开会话，恢复列表页
-            if(targetView !== 'chat') { closeChatSession(); }
+            if(targetView !== 'chat') closeChatSession();
         }
 
-        // Match 页面子 Tab 分流切换
+        // Sub-Tab Switching (Match)
         function switchMatchSubTab(sub) {
             ['hr', 'active', 'pending'].forEach(s => {
                 const block = document.getElementById(`match-sub-${s}`);
@@ -420,22 +564,83 @@
             });
         }
 
-        // Feed Filter 模式点击切换
+        // Sub-Tab Switching (Saved)
+        function switchSavedTab(sub) {
+            const jobBtn = document.getElementById('saved-tab-job');
+            const compBtn = document.getElementById('saved-tab-company');
+            if(sub === 'job') {
+                jobBtn.className = "px-3 py-1 font-bold bg-neutral-100 rounded-md text-black transition-all";
+                compBtn.className = "px-3 py-1 text-neutral-500 rounded-md transition-all";
+            } else {
+                compBtn.className = "px-3 py-1 font-bold bg-neutral-100 rounded-md text-black transition-all";
+                jobBtn.className = "px-3 py-1 text-neutral-500 rounded-md transition-all";
+            }
+        }
+
+        // Filter Panel Switching (Feed)
         function switchFilter(type) {
-            ['nearby', 'industry', 'score'].forEach(t => {
+            const panels = ['nearby', 'industry', 'score'];
+            panels.forEach(t => {
                 const btn = document.getElementById(`filter-${t}`);
+                const panel = document.getElementById(`panel-${t}`);
                 if(t === type) {
-                    btn.className = "px-3.5 py-1.5 rounded-full text-xs font-bold bg-black text-white flex items-center gap-1 transition-all";
+                    btn.classList.add('bg-black', 'text-white', 'font-bold');
+                    btn.classList.remove('bg-white', 'text-neutral-600', 'font-medium');
+                    panel.classList.add('open');
                 } else {
-                    btn.className = "px-3.5 py-1.5 rounded-full text-xs font-medium bg-white text-neutral-600 border border-neutral-200 flex items-center gap-1 transition-all";
+                    btn.classList.add('bg-white', 'text-neutral-600', 'font-medium');
+                    btn.classList.remove('bg-black', 'text-white', 'font-bold');
+                    panel.classList.remove('open');
                 }
             });
         }
 
-        // 4. FEED TINDER 卡片渲染渲染与拖拽核心交互引擎
+        // Chip toggles
+        function toggleChip(btn) {
+            if(btn.classList.contains('bg-black')) {
+                btn.classList.replace('bg-black', 'bg-white');
+                btn.classList.replace('text-white', 'text-neutral-600');
+            } else {
+                // If "All" is clicked, deselect others in same parent
+                btn.parentElement.querySelectorAll('button').forEach(b => {
+                    b.classList.replace('bg-black', 'bg-neutral-100');
+                    b.classList.replace('text-white', 'text-neutral-600');
+                });
+                btn.classList.replace('bg-neutral-100', 'bg-black');
+                btn.classList.replace('bg-white', 'bg-black');
+                btn.classList.replace('text-neutral-600', 'text-white');
+            }
+        }
+
+        // Address Picker Bottom Sheet
+        function openAddressSheet() {
+            document.getElementById('address-sheet').classList.add('open');
+            document.getElementById('address-sheet-overlay').classList.remove('hidden');
+            setTimeout(() => document.getElementById('address-sheet-overlay').classList.remove('opacity-0'), 10);
+        }
+        function closeAddressSheet() {
+            document.getElementById('address-sheet').classList.remove('open');
+            document.getElementById('address-sheet-overlay').classList.add('opacity-0');
+            setTimeout(() => document.getElementById('address-sheet-overlay').classList.add('hidden'), 300);
+        }
+        function selectAddress(addr) {
+            document.getElementById('address-input').value = addr;
+        }
+        function confirmAddress() {
+            const val = document.getElementById('address-input').value;
+            if(val) {
+                document.getElementById('selected-address-label').innerText = val;
+            }
+            closeAddressSheet();
+            // Optional: visual reload of deck to simulate finding new jobs
+            const deck = document.getElementById('deck');
+            deck.style.opacity = '0';
+            setTimeout(() => { renderDeck(); deck.style.opacity = '1'; }, 300);
+        }
+
+        // Swipe Deck Rendering & Logic
         function renderDeck() {
             const deck = document.getElementById('deck');
-            // 清理除空状态提示外的残留旧节点卡片
             const cards = deck.querySelectorAll('.swipe-card');
             cards.forEach(c => c.remove());
 
@@ -450,14 +655,12 @@
                 const card = document.createElement('div');
                 card.className = "swipe-card bg-white rounded-2xl border border-neutral-200/60 shadow-md overflow-hidden flex flex-col";
                 card.id = `card-${job.id}`;
-                // 通过叠加 z-index 和缩放模拟层级物理堆叠感
                 card.style.zIndex = MOCK_JOBS.length - index;
                 if(index > 0) {
                     card.style.transform = `scale(${1 - index * 0.04}) translateY(${index * 12}px)`;
                     card.style.opacity = 1 - index * 0.2;
                 }
 
-                // 填充组件视图
                 card.innerHTML = `
                     <div class="flash-overlay pass-overlay bg-rose-500/20"></div>
                     <div class="flash-overlay interested-overlay bg-[#D2FF00]/30"></div>
@@ -465,57 +668,53 @@
                     
                     <div class="h-[40%] w-full relative bg-neutral-900 overflow-hidden shrink-0">
                         <img class="w-full h-full object-cover opacity-90 select-none" src="${job.image}" pointer-events="none">
-                        <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
-                        <div class="absolute bottom-3 left-4 right-4 flex justify-between items-center">
-                            <span class="text-white text-xs font-semibold bg-black/40 backdrop-blur-xs px-2.5 py-1 rounded-md border border-white/10">${job.company}</span>
-                            <span class="accent-bg text-black text-[11px] font-bold px-2 py-0.5 rounded-sm flex items-center gap-0.5">
-                                <i data-lucide="zap" class="w-2.5 h-2.5 fill-current"></i> 90%+ 匹配
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent"></div>
+                        <div class="absolute bottom-3 left-4 right-4 flex justify-between items-end">
+                            <div>
+                                <span class="text-white text-[11px] font-bold bg-black/40 backdrop-blur-md px-2 py-0.5 rounded border border-white/10 mb-1 inline-block">${job.company}</span>
+                                <div class="text-white text-xs font-medium flex items-center gap-1"><i data-lucide="map-pin" class="w-3 h-3"></i> ${job.location}</div>
+                            </div>
+                            <span class="accent-bg text-black text-[11px] font-bold px-2 py-1 rounded shadow-sm flex items-center gap-0.5 shrink-0">
+                                <i data-lucide="zap" class="w-3 h-3 fill-current"></i> 90%+ 匹配
                             </span>
                         </div>
                     </div>
 
-                    <div class="flex-1 p-4 flex flex-col justify-between overflow-hidden" onclick="handleCardClick(event, '${job.id}')">
+                    <div class="flex-1 p-4 flex flex-col justify-between overflow-hidden cursor-pointer" onclick="handleCardClick(event, '${job.id}')">
                         <div>
                             <div class="flex justify-between items-start gap-1">
-                                <h3 class="text-lg font-bold text-neutral-900 leading-snug truncate max-w-[70%]">${job.title}</h3>
-                                <span class="text-base font-extrabold text-neutral-900 tracking-tight shrink-0">${job.salary}</span>
+                                <h3 class="text-lg font-bold text-neutral-900 leading-snug truncate max-w-[65%]">${job.title}</h3>
+                                <span class="text-[15px] font-extrabold text-neutral-900 tracking-tight shrink-0">${job.salary}</span>
                             </div>
-                            
-                            <div class="flex items-center space-x-3 text-xs text-neutral-600 mt-1 font-medium">
-                                <span class="flex items-center text-black font-semibold bg-[#D2FF00]/20 px-1.5 py-0.5 rounded-sm">
-                                    <i data-lucide="subway" class="w-3 h-3 mr-0.5"></i> 地铁直达 ${job.commute}
-                                </span>
-                                <span class="flex items-center"><i data-lucide="map-pin" class="w-3 h-3 mr-0.5"></i>${job.location}</span>
+                            <div class="inline-flex items-center text-black text-[11px] font-bold bg-[#D2FF00]/20 px-2 py-0.5 rounded-md mt-1.5 border border-[#D2FF00]/40">
+                                <i data-lucide="subway" class="w-3 h-3 mr-1"></i> 单程通勤 ${job.commute}
                             </div>
                         </div>
 
-                        <div class="flex flex-wrap gap-1.5 my-2 overflow-hidden max-h-[72px]">
-                            ${job.tags.map(t => `<span class="px-2 py-1 bg-neutral-100 text-neutral-600 text-[11px] font-medium rounded-md border border-neutral-200/30">${t}</span>`).join('')}
+                        <div class="flex flex-wrap gap-1.5 my-3 overflow-hidden max-h-[50px]">
+                            ${job.tags.map(t => `<span class="px-2 py-1 bg-neutral-50 text-neutral-600 text-[10px] font-medium rounded-md border border-neutral-200">${t}</span>`).join('')}
                         </div>
 
-                        <p class="text-xs text-neutral-500 line-clamp-2 bg-neutral-50 p-2 rounded-lg border border-neutral-100">${job.desc}</p>
+                        <div class="text-xs text-neutral-500 line-clamp-2 bg-neutral-50 p-2.5 rounded-xl border border-neutral-100 leading-relaxed">
+                            <span class="font-semibold text-neutral-700">要求：</span>${job.req.substring(3).replace(/\n/g, ' ')}
+                        </div>
                     </div>
                 `;
-
                 deck.appendChild(card);
                 setupSwipeGesture(card);
             });
             lucide.createIcons();
         }
 
-        // 手势触控/鼠标拖拽引擎
         function setupSwipeGesture(card) {
-            let startX = 0, startY = 0, moveX = 0, moveY = 0;
-            let isDragging = false;
+            let startX = 0, startY = 0, moveX = 0, moveY = 0, isDragging = false;
 
             const onStart = (e) => {
-                // 如果点击了卡片文本细节层导致Modal弹出，则不激活滑动
                 if(e.target.closest('.no-swipe')) return;
                 isDragging = true;
                 const clientX = e.clientX || e.touches[0].clientX;
                 const clientY = e.clientY || e.touches[0].clientY;
-                startX = clientX;
-                startY = clientY;
+                startX = clientX; startY = clientY;
                 card.style.transition = 'none';
             };
 
@@ -523,30 +722,23 @@
                 if(!isDragging) return;
                 const clientX = e.clientX || (e.touches && e.touches[0].clientX);
                 const clientY = e.clientY || (e.touches && e.touches[0].clientY);
-                moveX = clientX - startX;
-                moveY = clientY - startY;
+                moveX = clientX - startX; moveY = clientY - startY;
 
-                // 计算物理旋转倾斜
-                const rotation = moveX / 15;
-                card.style.transform = `translate(${moveX}px, ${moveY}px) rotate(${rotation}deg)`;
+                card.style.transform = `translate(${moveX}px, ${moveY}px) rotate(${moveX / 15}deg)`;
 
-                // 实时处理闪光覆盖层反馈
-                const passOverlay = card.querySelector('.pass-overlay');
-                const interestedOverlay = card.querySelector('.interested-overlay');
-                const saveOverlay = card.querySelector('.save-overlay');
+                const passOver = card.querySelector('.pass-overlay');
+                const intOver = card.querySelector('.interested-overlay');
+                const saveOver = card.querySelector('.save-overlay');
 
-                if (moveY < -40 && Math.abs(moveX) < Math.abs(moveY)) { // 上滑收藏
-                    saveOverlay.style.opacity = Math.min(Math.abs(moveY) / 120, 1);
-                    passOverlay.style.opacity = 0;
-                    interestedOverlay.style.opacity = 0;
-                } else if (moveX > 0) { // 右滑感兴趣
-                    interestedOverlay.style.opacity = Math.min(moveX / 120, 1);
-                    passOverlay.style.opacity = 0;
-                    saveOverlay.style.opacity = 0;
-                } else if (moveX < 0) { // 左滑Pass
-                    passOverlay.style.opacity = Math.min(Math.abs(moveX) / 120, 1);
-                    interestedOverlay.style.opacity = 0;
-                    saveOverlay.style.opacity = 0;
+                if (moveY < -40 && Math.abs(moveX) < Math.abs(moveY)) { 
+                    saveOver.style.opacity = Math.min(Math.abs(moveY) / 120, 1);
+                    passOver.style.opacity = intOver.style.opacity = 0;
+                } else if (moveX > 0) { 
+                    intOver.style.opacity = Math.min(moveX / 120, 1);
+                    passOver.style.opacity = saveOver.style.opacity = 0;
+                } else if (moveX < 0) { 
+                    passOver.style.opacity = Math.min(Math.abs(moveX) / 120, 1);
+                    intOver.style.opacity = saveOver.style.opacity = 0;
                 }
             };
 
@@ -555,133 +747,124 @@
                 isDragging = false;
                 card.style.transition = 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.2s';
                 
-                const threshold = 110;
-                if (moveY < -threshold && Math.abs(moveX) < Math.abs(moveY)) {
-                    executeSwipeAction(card, 'save');
-                } else if (moveX > threshold) {
-                    executeSwipeAction(card, 'interested');
-                } else if (moveX < -threshold) {
-                    executeSwipeAction(card, 'pass');
-                } else {
-                    // 回弹弹性归位
+                const threshold = 100;
+                if (moveY < -threshold && Math.abs(moveX) < Math.abs(moveY)) executeSwipeAction(card, 'save');
+                else if (moveX > threshold) executeSwipeAction(card, 'interested');
+                else if (moveX < -threshold) executeSwipeAction(card, 'pass');
+                else {
                     card.style.transform = 'translate(0, 0) rotate(0deg)';
                     card.querySelectorAll('.flash-overlay').forEach(o => o.style.opacity = 0);
                 }
-                moveX = 0; moveY = 0;
+                moveX = moveY = 0;
             };
 
-            // 监听鼠标事件
             card.addEventListener('mousedown', onStart);
             document.addEventListener('mousemove', onMove);
             document.addEventListener('mouseup', onEnd);
-            // 监听移动端触摸事件
             card.addEventListener('touchstart', onStart, {passive: true});
             card.addEventListener('touchmove', onMove, {passive: true});
             card.addEventListener('touchend', onEnd);
         }
 
-        // 执行飞出视图物理卡片结算
         function executeSwipeAction(card, action) {
             const currentJob = MOCK_JOBS[0];
             if(!currentJob) return;
 
             if (action === 'interested') {
-                card.style.transform = 'translate(400px, 50px) rotate(30deg)';
-                card.style.opacity = '0';
-                // 模拟25%概率触发高潮交互 - 双向匹配弹窗
-                setTimeout(() => {
-                    if(currentJob.id === 'job-1' || Math.random() > 0.75) {
-                        triggerMatchSuccessAnimation();
-                    }
-                }, 200);
+                card.style.transform = 'translate(400px, 50px) rotate(30deg)'; card.style.opacity = '0';
+                setTimeout(() => { if(currentJob.id === 'job-1' || Math.random() > 0.7) triggerMatchSuccessAnimation(); }, 200);
             } else if (action === 'pass') {
-                card.style.transform = 'translate(-400px, 50px) rotate(-30deg)';
-                card.style.opacity = '0';
+                card.style.transform = 'translate(-400px, 50px) rotate(-30deg)'; card.style.opacity = '0';
             } else if (action === 'save') {
-                card.style.transform = 'translate(0, -500px)';
-                card.style.opacity = '0';
-                // 加入临时收藏列表
+                card.style.transform = 'translate(0, -500px)'; card.style.opacity = '0';
                 pushToSavedList(currentJob);
             }
 
             setTimeout(() => {
                 card.remove();
-                MOCK_JOBS.shift(); // 剔除数据栈顶
-                renderDeck();     // 刷新并重排后续底层卡片
+                MOCK_JOBS.shift();
+                renderDeck();
             }, 200);
         }
 
-        // 外部按钮驱动的轻点卡片分发行程
         function triggerSwipeAction(action) {
             const topCard = document.querySelector('.swipe-card:first-child');
             if(!topCard) return;
-            
             topCard.style.transition = 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s';
             executeSwipeAction(topCard, action);
         }
 
-        // 5. CARD CLICK / DETAIL OVERLAY ENGINE
+        // Job Details
         function handleCardClick(event, jobId) {
-            // 如果点到具体标签和文字，直接拉起完整JD详情层
-            const targetJob = [...MOCK_JOBS].find(j => j.id === jobId);
+            const targetJob = [...MOCK_JOBS, ...savedJobsList].find(j => j.id === jobId);
             if(!targetJob) return;
 
             const modalContent = document.getElementById('modal-detail-content');
             modalContent.innerHTML = `
-                <div class="h-48 w-full rounded-2xl overflow-hidden shadow-inner my-2">
+                <div class="h-56 w-full rounded-2xl overflow-hidden shadow-inner my-2 relative">
                     <img class="w-full h-full object-cover" src="${targetJob.image}">
+                    <div class="absolute bottom-3 left-3 bg-black/50 backdrop-blur-md px-3 py-1 rounded-lg border border-white/20">
+                        <span class="text-white font-bold text-sm">${targetJob.company}</span>
+                    </div>
                 </div>
                 <div>
-                    <h2 class="text-2xl font-extrabold text-neutral-900">${targetJob.title}</h2>
-                    <div class="text-xl font-black text-neutral-800 mt-1">${targetJob.salary}</div>
-                    <div class="text-xs text-neutral-500 mt-1 font-medium flex gap-3">
-                        <span>公司: <b>${targetJob.company}</b></span>
-                        <span>地点: <b>${targetJob.location}</b></span>
+                    <h2 class="text-2xl font-extrabold text-neutral-900 leading-tight">${targetJob.title}</h2>
+                    <div class="text-xl font-black text-neutral-800 mt-2">${targetJob.salary}</div>
+                    <div class="flex items-center gap-3 mt-3">
+                        <span class="bg-[#D2FF00]/30 text-black px-2 py-1 rounded-md text-xs font-bold border border-[#D2FF00]/50"><i data-lucide="subway" class="w-3 h-3 inline mr-1"></i>通勤 ${targetJob.commute}</span>
+                        <span class="text-xs text-neutral-500 font-medium flex items-center"><i data-lucide="map-pin" class="w-3 h-3 mr-1"></i>${targetJob.location}</span>
                     </div>
                 </div>
                 <hr class="border-neutral-200">
                 <div>
-                    <h4 class="font-bold text-xs text-neutral-400 uppercase tracking-wider mb-2">职位核心工作内容</h4>
-                    <p class="text-sm text-neutral-700 leading-relaxed whitespace-pre-line">${targetJob.desc}</p>
+                    <h4 class="font-bold text-xs text-neutral-400 uppercase tracking-wider mb-3">职位描述</h4>
+                    <p class="text-sm text-neutral-700 leading-relaxed bg-white p-4 rounded-xl border border-neutral-100 shadow-sm">${targetJob.desc}</p>
                 </div>
                 <div>
-                    <h4 class="font-bold text-xs text-neutral-400 uppercase tracking-wider mb-2">任职硬性资格要求</h4>
-                    <p class="text-sm text-neutral-700 leading-relaxed whitespace-pre-line">${targetJob.req}</p>
+                    <h4 class="font-bold text-xs text-neutral-400 uppercase tracking-wider mb-3">任职要求</h4>
+                    <p class="text-sm text-neutral-700 leading-relaxed whitespace-pre-line bg-white p-4 rounded-xl border border-neutral-100 shadow-sm">${targetJob.req}</p>
                 </div>
                 <div>
-                    <h4 class="font-bold text-xs text-neutral-400 uppercase tracking-wider mb-2">企业文化福利资产</h4>
-                    <div class="flex flex-wrap gap-2 pt-1">
-                        ${targetJob.tags.map(t => `<span class="px-2.5 py-1 bg-white border border-neutral-300/60 rounded-md text-xs font-medium text-neutral-700 shadow-2xs">${t}</span>`).join('')}
+                    <h4 class="font-bold text-xs text-neutral-400 uppercase tracking-wider mb-3">福利与标签</h4>
+                    <div class="flex flex-wrap gap-2">
+                        ${targetJob.tags.map(t => `<span class="px-3 py-1.5 bg-neutral-100 rounded-lg text-xs font-semibold text-neutral-700">${t}</span>`).join('')}
                     </div>
                 </div>
             `;
-            
-            const modal = document.getElementById('job-detail-modal');
-            modal.classList.remove('translate-y-full');
+            lucide.createIcons();
+            document.getElementById('job-detail-modal').classList.remove('translate-y-full');
         }
 
         function closeJobDetail() {
             document.getElementById('job-detail-modal').classList.add('translate-y-full');
         }
 
-        // 6. SAVED 动态管理机制
+        // Saved List Logic
         function pushToSavedList(job) {
             if(savedJobsList.some(j => j.id === job.id)) return;
             savedJobsList.push(job);
+            document.getElementById('saved-empty').classList.add('hidden');
             
             const container = document.getElementById('saved-list-container');
             const row = document.createElement('div');
-            row.className = "bg-white p-4 rounded-2xl border border-neutral-100 shadow-sm flex justify-between items-center";
+            row.className = "bg-white p-4 rounded-2xl border border-neutral-100 shadow-sm flex flex-col gap-3";
             row.id = `saved-item-${job.id}`;
             row.innerHTML = `
-                <div>
-                    <h4 class="font-bold text-sm text-neutral-800">${job.title}</h4>
-                    <p class="text-xs text-neutral-500 mt-0.5">${job.company} · ${job.location}</p>
-                    <span class="inline-block mt-2 px-2 py-0.5 bg-neutral-100 text-neutral-600 text-[10px] rounded font-medium">单程通勤: ${job.commute}</span>
+                <div class="flex justify-between items-start cursor-pointer" onclick="handleCardClick(event, '${job.id}')">
+                    <div class="flex gap-3">
+                        <img src="${job.image}" class="w-12 h-12 rounded-xl object-cover shrink-0">
+                        <div>
+                            <h4 class="font-bold text-sm text-neutral-800">${job.title}</h4>
+                            <p class="text-[11px] text-neutral-500 mt-0.5">${job.company} · ${job.salary}</p>
+                        </div>
+                    </div>
                 </div>
-                <button onclick="applyFromSaved('${job.id}')" class="px-3 py-1.5 accent-bg text-black text-xs font-bold rounded-lg border border-black/10 shadow-xs">
-                    发送投递信号
-                </button>
+                <div class="flex justify-between items-center pt-2 border-t border-neutral-50">
+                    <span class="text-[10px] text-neutral-400 font-medium">通勤: ${job.commute}</span>
+                    <button onclick="applyFromSaved('${job.id}')" class="px-4 py-1.5 accent-bg text-black text-xs font-bold rounded-lg hover:opacity-90 transition-opacity">
+                        发出投递信号
+                    </button>
+                </div>
             `;
             container.appendChild(row);
         }
@@ -689,142 +872,65 @@
         function applyFromSaved(jobId) {
             document.getElementById(`saved-item-${jobId}`).remove();
             savedJobsList = savedJobsList.filter(j => j.id !== jobId);
+            if(savedJobsList.length === 0) document.getElementById('saved-empty').classList.remove('hidden');
             triggerMatchSuccessAnimation();
         }
 
-        // 7. BLIND FIRST HR 匿名机制交互
+        // Match & HR interactions
         function revealBlindHR(btn) {
             const card = btn.closest('.bg-white');
-            const placeholder = card.querySelector('.blind-avatar-placeholder');
-            const avatar = card.querySelector('.blind-avatar');
-            const nameSpan = card.querySelector('.blind-name');
-
-            btn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> 正在解密解析...`;
+            btn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> 正在解密...`;
             lucide.createIcons();
-
             setTimeout(() => {
-                placeholder.classList.add('hidden');
-                avatar.classList.remove('hidden');
-                nameSpan.innerText = "张丽敏 (Moka 团队负责人)";
-                btn.className = "flex-1 py-2 bg-emerald-100 text-emerald-800 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 border border-emerald-200";
-                btn.innerHTML = `<i data-lucide="unlock" class="w-3.5 h-3.5"></i> 已全面解锁`;
+                card.querySelector('.blind-avatar-placeholder').classList.add('hidden');
+                card.querySelector('.blind-avatar').classList.remove('hidden');
+                card.querySelector('.blind-name').innerText = "张丽敏 (Moka 团队负责人)";
+                btn.className = "flex-1 py-2 bg-emerald-100 text-emerald-800 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5";
+                btn.innerHTML = `<i data-lucide="unlock" class="w-3.5 h-3.5"></i> 已解锁简历`;
                 lucide.createIcons();
             }, 800);
         }
-
-        function triggerDirectMatch(roleName) {
-            triggerMatchSuccessAnimation();
-        }
-
-        // 8. DOUBLE MATCH 触发事件及弹层管理
+        function triggerDirectMatch(roleName) { triggerMatchSuccessAnimation(); }
         function triggerMatchSuccessAnimation() {
-            const popup = document.getElementById('match-popup');
-            popup.classList.remove('hidden');
-            // 更新个人资料卡片计数器
-            document.getElementById('profile-match-count').innerText = "3";
+            document.getElementById('match-popup').classList.remove('hidden');
+            const countEl = document.getElementById('profile-match-count');
+            countEl.innerText = parseInt(countEl.innerText) + 1;
         }
-
-        function closeMatchPopup() {
-            document.getElementById('match-popup').classList.add('hidden');
-        }
-
+        function closeMatchPopup() { document.getElementById('match-popup').classList.add('hidden'); }
         function goToChatFromMatch() {
             closeMatchPopup();
             switchTab('chat');
             openChatSession('米哈游-招聘组');
         }
 
-        // 9. CHAT SESSION 独立会话动态聊天流管理
-        const MOCK_CHAT_HISTORIES = {
-            '米哈游-招聘组': {
-                title: "米哈游 · 招聘专员",
-                status: "Interview scheduled",
-                messages: [
-                    { sender: 'hr', time: '14:30', text: '您好！我们技术组评估了您在 GitHub 提交的跨平台架构治理开源项目，感觉与我们目前的岗位架构高度贴合。' },
-                    { sender: 'hr', time: '14:31', text: '请问这周二方便约一轮电话初试吗？大约耗时 20 分钟。' }
-                ]
-            },
-            '字节跳动HR-Line': {
-                title: "字节跳动 · 资深商业化 PM",
-                status: "Waiting feedback",
-                messages: [
-                    { sender: 'candidate', time: '昨天', text: '您好，我已经完成提交了第二轮的场景策略面，请问大概什么时候会有下一阶段结果更新呢？' },
-                    { sender: 'hr', time: '昨天', text: '业务leader正在高密集面评中，预计明天下午前我会同步最新状态给您！' }
-                ]
-            }
-        };
-
+        // Chat logic
         function openChatSession(sessionId) {
             activeChatSessionId = sessionId;
-            const chatData = MOCK_CHAT_HISTORIES[sessionId];
-            if(!chatData) return;
-
-            document.getElementById('chat-title').innerText = chatData.title;
-            document.getElementById('chat-status-pill').innerText = chatData.status;
-
-            const stream = document.getElementById('chat-message-stream');
-            // 清理并保留初始小提示
-            stream.innerHTML = `<div class="flex justify-center"><span class="text-[10px] text-neutral-400 bg-neutral-200/50 px-2 py-0.5 rounded-full">已开启匿名通勤地理匹配隐私通道</span></div>`;
-
-            chatData.messages.forEach(msg => {
-                const row = document.createElement('div');
-                if(msg.sender === 'candidate') {
-                    row.className = "flex justify-end items-end space-x-2";
-                    row.innerHTML = `
-                        <div class="flex flex-col items-end max-w-[75%]">
-                            <div class="bg-black text-white text-xs p-3 rounded-2xl rounded-br-none shadow-xs leading-relaxed">${msg.text}</div>
-                            <span class="text-[9px] text-neutral-400 mt-1">${msg.time}</span>
-                        </div>
-                    `;
-                } else {
-                    row.className = "flex justify-start items-end space-x-2";
-                    row.innerHTML = `
-                        <div class="w-8 h-8 rounded-xl bg-neutral-800 text-white flex items-center justify-center font-mono text-[10px] shrink-0">HR</div>
-                        <div class="flex flex-col items-start max-w-[75%]">
-                            <div class="bg-white text-neutral-800 text-xs p-3 rounded-2xl rounded-bl-none shadow-xs border border-neutral-100 leading-relaxed">${msg.text}</div>
-                            <span class="text-[9px] text-neutral-400 mt-1">${msg.time}</span>
-                        </div>
-                    `;
-                }
-                stream.appendChild(row);
-            });
-
             document.getElementById('chat-detail-view').classList.remove('hidden');
-            // 自动滚动到底部
-            stream.scrollTop = stream.scrollHeight;
         }
-
         function closeChatSession() {
             document.getElementById('chat-detail-view').classList.add('hidden');
             activeChatSessionId = "";
         }
-
         function sendMockChatMessage() {
             const input = document.getElementById('chat-input-box');
-            const text = input.value.trim();
-            if(!text || !activeChatSessionId) return;
-
-            // 1. 同步压入本地模拟内存
-            MOCK_CHAT_HISTORIES[activeChatSessionId].messages.push({
-                sender: 'candidate',
-                time: '14:35',
-                text: text
-            });
-
-            // 2. 重新刷新局部会话对话流视图
-            openChatSession(activeChatSessionId);
+            if(!input.value.trim() || !activeChatSessionId) return;
+            const stream = document.getElementById('chat-message-stream');
+            
+            const msgRow = document.createElement('div');
+            msgRow.className = "flex justify-end items-end space-x-2";
+            msgRow.innerHTML = `<div class="bg-black text-white text-xs p-3 rounded-2xl rounded-br-none shadow-xs">${input.value}</div>`;
+            stream.appendChild(msgRow);
+            stream.scrollTop = stream.scrollHeight;
             input.value = "";
 
-            // 3. 模拟HR在 1 秒后自动给出收到答复的业务反馈反馈
             setTimeout(() => {
-                if(activeChatSessionId) {
-                    MOCK_CHAT_HISTORIES[activeChatSessionId].messages.push({
-                        sender: 'hr',
-                        time: '14:36',
-                        text: '收到您的答复！我立刻帮您在内部招聘系统录入确认安排。'
-                    });
-                    openChatSession(activeChatSessionId);
-                }
+                const replyRow = document.createElement('div');
+                replyRow.className = "flex justify-start items-end space-x-2";
+                replyRow.innerHTML = `<div class="w-8 h-8 rounded-xl bg-neutral-800 text-white flex items-center justify-center font-mono text-[10px] shrink-0">HR</div>
+                                      <div class="bg-white text-neutral-800 text-xs p-3 rounded-2xl rounded-bl-none shadow-xs border border-neutral-100">收到，我这就去系统确认时间！</div>`;
+                stream.appendChild(replyRow);
+                stream.scrollTop = stream.scrollHeight;
             }, 1000);
         }
     </script>
